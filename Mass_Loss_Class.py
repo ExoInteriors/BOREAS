@@ -19,7 +19,6 @@ class MassLoss:
         G, sigma_EUV, mmw_H, m_H = self.params.G, self.params.sigma_EUV, self.params.mmw_H, self.params.m_H
         RS_flow = G * m_planet / (2. * cs**2)
 
-
         if RS_flow >= REUV:
             r = np.logspace(np.log10(REUV), np.log10(max(5 * RS_flow, 5 * REUV)), 250)
             u = FS.get_parker_wind(r, cs, RS_flow)
@@ -197,7 +196,7 @@ class MassLoss:
                 cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_eq))
                 rho_photo = g / (kappa_p * cs_eq**2)
 
-                result = {'mass': m_planet, 'radius': r_planet, 'teq': teq}
+                result = {'mass': m_planet, 'radius': r_planet, 'Teq': teq}
 
                 # Energy-limited (EL) regime calculations
                 REUV_solution_EL, time_scale_ratio = self.find_REUV_solution_EL(r_planet, m_planet, rho_photo, cs_eq, FEUV_photon)

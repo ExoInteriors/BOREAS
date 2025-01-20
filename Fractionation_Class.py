@@ -8,7 +8,7 @@ class Fractionation:
         """
         self.params = params
 
-    def preprocess_fractionation_params(self, cs, REUV, Mdot):
+    def preprocess_fractionation_params(self, cs, REUV, Mdot, Teq):
         """
         Preprocess parameters for the fractionation calculation.
         """
@@ -16,6 +16,10 @@ class Fractionation:
         m_H = self.params.m_H
         m_O = self.params.m_O
         T_REUV = (cs**2 * m_H * mmw_H) / self.params.k_b # Kelvin
+
+        if Teq > T_REUV:
+            raise ValueError(f"Solution excluded: T_eq ({Teq} K) exceeds T_REUV ({T_REUV} K).")
+
         b_i = 4.8e17 * T_REUV ** 0.75   # cm^-1 s^-1
         mass_difference = m_O - m_H     # grams
         flux_total = Mdot / (4 * np.pi * REUV**2) # g cm^-2 s^-1
