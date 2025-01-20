@@ -10,7 +10,7 @@ class MassLoss:
         """
         self.params = params
 
-    ### mass loss ###
+    ### Mass loss ###
         
     def compute_mdot_only(self, cs, REUV, m_planet):
         """
@@ -60,7 +60,7 @@ class MassLoss:
                 f1 = mdot_difference(lower_bound_initial)
             return brentq(mdot_difference, lower_bound_initial, upper_bound / 10)
 
-    ### momentum balance ###
+    ### Momentum balance ###
         
     def compare_densities_EL(self, REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon):
         """
@@ -130,22 +130,18 @@ class MassLoss:
         m_H = self.params.m_H
         alpha_rec = self.params.alpha_rec
 
-        # Calculate rho_EUV
         rho_EUV = rho_photo * np.exp((G * m_planet / cs_eq**2) * (1. / REUV - 1. / r_planet))
 
-        # Constants for RL case
         cs_RL = 1.2e6  # Sound speed for T ~ 10^4 K
         Hflow = min(REUV / 3, cs_RL**2 * REUV**2 / (2 * G * m_planet))
         nb = np.sqrt(FEUV_photon / (alpha_rec * Hflow))
 
-        # Determine u_RL
         Rs_RL = G * m_planet / (2. * cs_RL**2)
         if REUV <= Rs_RL:
             u_RL = FS.get_parker_wind_single(REUV, cs_RL, Rs_RL)
         else:
             u_RL = cs_RL
 
-        # Compute mass-loss rate
         Mdot_RL = 4 * np.pi * REUV**2 * m_H * nb * u_RL
         rho_flow = Mdot_RL / (4 * np.pi * r_planet**2 * u_RL)
 
@@ -177,10 +173,11 @@ class MassLoss:
         REUV_solution = brentq(root_function, REUV_lower_bound, REUV_upper_bound)
         return REUV_solution
 
-    ### run mass loss model ###
+    ### Run mass loss model ###
     def compute_mass_loss_parameters(self, m_planet, r_planet, teq):
         """
         Compute REUV, Mdot, cs, and classify regimes for mass loss.
+        Also filters solutions where RS_flow < REUV.
         """
         results = []
         for m_planet, r_planet, teq in zip(m_planet, r_planet, teq):
@@ -207,11 +204,13 @@ class MassLoss:
                 cs_use = self.compute_sound_speed(REUV_solution_EL, m_planet)
                 cs_use = min(cs_use, 1.2e6)
                 Mdot_EL = self.compute_mdot_only(cs_use, REUV_solution_EL, m_planet)
+                RS_flow = G * m_planet / (2. * cs_use**2)
 
                 result.update({
                     'REUV': REUV_solution_EL,
                     'cs': cs_use,
                     'Mdot': Mdot_EL,
+                    'RS_flow': RS_flow,
                     'time_scale_ratio': time_scale_ratio,
                     'regime': 'EL',
                 })
@@ -232,10 +231,19 @@ class MassLoss:
                         'REUV': REUV_solution_RL,
                         'cs': cs_use_RL,
                         'Mdot': Mdot_RL,
+                        'RS_flow': Rs_RL,
                         'regime': 'RL',
                     })
 
-                results.append(result)
+                # Only move on with results if photoevaporation happens: RS_flow < REUV
+                if result['RS_flow'] >= result['REUV']:
+                    results.append(result)
+                else:
+                    print(
+                        f"Excluded: RS_flow ({result['RS_flow']:.2e}) < REUV ({result['REUV']:.2e}) "
+                        f"for planet mass={m_planet/self.params.mearth:.2f} M_earth, "
+                        f"radius={r_planet/self.params.rearth:.2f} R_earth."
+                    )
 
             except Exception as e:
                 print(f"Error for planet mass={m_planet}, planet radius={r_planet}: {e}")

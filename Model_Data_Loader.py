@@ -34,6 +34,7 @@ class ModelDataLoader:
                     r_planet = r_planet[-1] # planet radius, cm.
                     m_planet = m_planet[-1] # planet mass in grams
                     Teq = temperature[-1]   # equilibrium temperature, K.
+                    # Teq = 2500.
 
                     radii_list.append(r_planet)
                     mass_list.append(m_planet)

@@ -27,7 +27,7 @@ class Fractionation:
         return T_REUV, b_i, mass_difference, flux_total, reservoir_ratio
 
 
-    def iterative_fractionation(self, flux_total, REUV, m_planet, T_REUV, b_i, mass_difference, reservoir_ratio, tol=1e-30, max_iter=10):
+    def iterative_fractionation(self, flux_total, REUV, m_planet, T_REUV, b_i, mass_difference, reservoir_ratio, tol=1e-30, max_iter=20):
         """
         Iteratively solve for phi_O given physical constraints.
         Ensure phi_O + phi_H = flux_total at the end.
@@ -57,7 +57,7 @@ class Fractionation:
                 if abs(phi_H + phi_O_new - flux_total) > tol:
                     print(f"Iteration {iteration}: Final phi_O + phi_H does not match flux_total. Adjusting.")
                     phi_O_new = flux_total - phi_H  # Enforce constraint
-                # print(f"Iteration {iteration}: Converged with flux total = {flux_total}, phi_O = {phi_O_new}, phi_H = {phi_H}.")
+                print(f"Iteration {iteration}: Converged with flux total = {flux_total}, phi_O = {phi_O_new}, phi_H = {phi_H}.")
                 return phi_O_new, phi_H, x_O
 
             phi_O = phi_O_new  # Update for the next iteration
