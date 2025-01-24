@@ -154,3 +154,25 @@ class ResultsHandler:
         plt.ylabel("Flux Values (g/cm^2/s)")
         plt.yscale('log')
         plt.show()
+
+    @staticmethod
+    def plot_pressure_vs_m_planet(results):
+        """Plot pressures vs planetary mass for all three methods."""
+        params = ModelParams()
+        mearth = params.mearth
+
+        m_planet = [res['m_planet'] / mearth for res in results]  # Earth masses
+        # pressures converted to pascals
+        P_EUV_dyn_ideal = [res['P_EUV (dyn/cm2)'] for res in results]
+        fig, ax1 = plt.subplots()
+
+        ax1.plot(m_planet, P_EUV_dyn_ideal, 'o-', label="Ideal Gas", color="blue")
+
+        ax1.set_xlabel("Planet Mass (Earth Masses)")
+        ax1.set_ylabel("Pressure at REUV (Pa)", color="black")
+        ax1.set_yscale('log')
+        ax1.tick_params(axis='y', labelcolor="black")
+        ax1.legend(loc="upper right")
+
+        plt.tight_layout()
+        plt.show()
