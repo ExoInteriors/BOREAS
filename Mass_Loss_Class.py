@@ -266,20 +266,14 @@ class MassLoss:
     
     ### Misc ###
     
-    def calculate_pressure_ideal_gas(self, results):
+    def calculate_pressure_ideal_gas(self, rho_EUV, T_REUV):
         """
         Calculate pressure values at REUV assuming hydrostatic equilibrium, after Debrecht et al. 2019 framework
         """
         k_b = self.params.k_b
         m_H = self.params.m_H
         mmw_H = self.params.mmw_H
-    
-        for planet in results:
-            rho_EUV = planet['rho_EUV']  # g/cm^3
-            T_REUV = planet['T_REUV']  # K
 
-            P_REUV = rho_EUV * k_b * T_REUV / (mmw_H * m_H) # ideal gas law
+        P_REUV = rho_EUV * k_b * T_REUV / (mmw_H * m_H) # ideal gas law
 
-            planet['P_EUV (dyn/cm2)'] = P_REUV
-
-        return results
+        return P_REUV

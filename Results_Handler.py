@@ -161,18 +161,24 @@ class ResultsHandler:
         params = ModelParams()
         mearth = params.mearth
 
-        m_planet = [res['m_planet'] / mearth for res in results]  # Earth masses
-        # pressures converted to pascals
-        P_EUV_dyn_ideal = [res['P_EUV (dyn/cm2)'] for res in results]
+        m_planet = [res['m_planet'] / mearth for res in results] # Earth masses
+        P_EUV_dyn_ideal = [res['P_EUV'] for res in results] # Pressure in dyn/cm2
+        P_EUV_Pa = [p * 0.1 for p in P_EUV_dyn_ideal] # Convert dyn/cm2 to Pa
+        P_EUV_bar = [p * 1e-6 for p in P_EUV_Pa] # Convert Pa to bar
+
         fig, ax1 = plt.subplots()
 
-        ax1.plot(m_planet, P_EUV_dyn_ideal, 'o-', label="Ideal Gas", color="blue")
-
+        ax1.plot(m_planet, P_EUV_Pa, 'o-', color="blue", label="Pressure (Pa)")
         ax1.set_xlabel("Planet Mass (Earth Masses)")
-        ax1.set_ylabel("Pressure at REUV (Pa)", color="black")
+        ax1.set_ylabel("Pressure at REUV (Pa)", color="blue")
         ax1.set_yscale('log')
-        ax1.tick_params(axis='y', labelcolor="black")
-        ax1.legend(loc="upper right")
+        ax1.tick_params(axis='y', labelcolor="blue")
+
+        ax2 = ax1.twinx()
+        ax2.set_ylabel("Pressure at REUV (bar)", color="red")
+        ax2.plot(m_planet, P_EUV_bar, 's-', color="red", label="Pressure (bar)")  
+        ax2.set_yscale('log')
+        ax2.tick_params(axis='y', labelcolor="red")
 
         plt.tight_layout()
         plt.show()
