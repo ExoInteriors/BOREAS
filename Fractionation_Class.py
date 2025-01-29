@@ -8,27 +8,30 @@ class Fractionation:
         """
         self.params = params
 
-    def preprocess_fractionation_params(self, cs, REUV, Mdot, Teq):
+    def compute_T_REUV(self, cs):
         """
-        Preprocess parameters for the fractionation calculation.
+        Calculate the temperature T_REUV that corresponds to the REUV radius with a specific sound speed cs.
         """
         mmw_H = self.params.mmw_H
         m_H = self.params.m_H
-        m_O = self.params.m_O
         T_REUV = (cs**2 * m_H * mmw_H) / self.params.k_b # Kelvin
 
-        if Teq > T_REUV:
-            raise ValueError(f"Solution excluded: T_eq ({Teq} K) exceeds T_REUV ({T_REUV} K).")
-
+        return T_REUV
+    
+    def compute_fractionation_params(self, cs, REUV, Mdot):
+        """
+        Compute all necessary parameters for fractionation.
+        """
+        T_REUV = self.compute_T_REUV(cs)
         b_i = 4.8e17 * T_REUV ** 0.75   # cm^-1 s^-1
-        mass_difference = m_O - m_H     # grams
+        mass_difference = self.params.m_O - self.params.m_H     # grams
         flux_total = Mdot / (4 * np.pi * REUV**2) # g cm^-2 s^-1
 
         N_H = 1                         # Hydrogen reservoir
         N_O = N_H / 2                   # For H2O, the reservoir of O is half of the reservoir of H
         reservoir_ratio = N_O / N_H     # needed ratio if we solve for φ_k in eq.2 Zahnle & Kasting 1986
     
-        return T_REUV, b_i, mass_difference, flux_total, reservoir_ratio
+        return b_i, mass_difference, flux_total, reservoir_ratio
 
 
     def iterative_fractionation(self, flux_total, REUV, m_planet, T_REUV, b_i, mass_difference, reservoir_ratio, tol=1e-30, max_iter=20):
