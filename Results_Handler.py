@@ -33,23 +33,38 @@ class ResultsHandler:
     @staticmethod
     def plot_cs_REUV(results):
         """Plot sound speed vs REUV and REUV/r_planet."""
+        params = ModelParams()
+        mearth = params.mearth
+        
+        m_planet = [res['m_planet'] / mearth for res in results]
         cs = [res['cs'] for res in results]
         REUV = [res['REUV'] for res in results]
         REUV_r = [res['REUV'] / res['r_planet'] for res in results]
 
+        # fig, ax1 = plt.subplots(figsize=(7, 5))
         fig, ax1 = plt.subplots()
 
-        ax1.set_xlabel("Sound Speed (cm/s)")
-        ax1.set_ylabel("REUV (cm)", color="blue")
-        ax1.plot(cs, REUV, 'o-', color="blue", label="REUV")
+        ax1.set_xlabel("$c_{s}$ (cm/s)")
+        ax1.set_ylabel("$R_{EUV}$ (cm)")
+        ax1.plot(cs, REUV, '.-')
         ax1.set_xscale('log')
         ax1.set_yscale('log')
-        ax1.tick_params(axis='y', labelcolor="blue")
+        ax1.tick_params(axis='y')
 
         ax2 = ax1.twinx()
-        ax2.set_ylabel("REUV/r_planet", color="red")
-        ax2.plot(cs, REUV_r, 'o-', color="red", label="REUV/r_planet")
-        ax2.tick_params(axis='y', labelcolor="red")
+        ax2.set_ylabel("$R_{EUV}/R_{planet}$", color="orangered")
+        ax2.plot(cs, REUV_r, '.-', color="orangered")
+        ax2.tick_params(axis='y', labelcolor="orangered")
+
+        skip_masses = {10, 12, 14}
+        for i, mass in enumerate(m_planet):
+            if round(mass) not in skip_masses:
+                ax1.annotate(f"{mass:.0f}M⊕", (cs[i], REUV[i]), textcoords="offset points", xytext=(-13,5), ha='left', fontsize=6, color='black')
+
+        skip_masses2 = {8, 10, 11, 13, 14}
+        for i, mass in enumerate(m_planet):
+            if round(mass) not in skip_masses2:
+                ax2.annotate(f"{mass:.0f}M⊕", (cs[i], REUV_r[i]), textcoords="offset points", xytext=(-7,-12), ha='left', fontsize=6, color='black')
 
         fig.tight_layout()
         plt.show()
@@ -139,8 +154,8 @@ class ResultsHandler:
         plt.show()
 
     @staticmethod
-    def plot_phiH_phiO_vs_m_planet_color(results):
-        """Phi_H and Phi_O on the same axis with colors mapped to m_planet."""
+    def plot_phiH_phiO_vs_m_planet2(results):
+        """Phi_H and Phi_O on the same axis."""
         params = ModelParams()
         mearth = params.mearth
         m_planet = [res['m_planet']/mearth for res in results]
@@ -153,6 +168,34 @@ class ResultsHandler:
         plt.xlabel("Planet Mass (Earth Masses)")
         plt.ylabel("Flux Values (g/cm^2/s)")
         plt.yscale('log')
+        plt.show()
+
+    @staticmethod
+    def plot_phiH_phiO_vs_REUV(results):
+        """Phi_H and Phi_O on the same axis."""
+        params = ModelParams()
+        mearth = params.mearth
+        
+        m_planet = [res['m_planet'] / mearth for res in results]
+        REUV = [res['REUV'] for res in results]
+        phi_H = [res['phi_H'] for res in results]
+        phi_O = [res['phi_O'] for res in results]
+
+        plt.figure(figsize=(6, 4))
+        plt.plot(REUV, phi_H, '.-', color='darkorchid', label="Hydrogen")
+        plt.plot(REUV, phi_O, '.-', color='gold', label="Oxygen")
+        plt.xlabel("$R_{EUV}$ (cm)")
+        plt.ylabel("Escape fluxes (g/cm$^{2}\cdot$ s)")
+        plt.yscale('log')
+        plt.xscale('log')
+
+        skip_masses = {8, 10, 11, 13, 14}
+        for i, mass in enumerate(m_planet):
+            if round(mass) not in skip_masses:
+                plt.annotate(f"{mass:.0f}M⊕", (REUV[i], phi_H[i]), textcoords="offset points", xytext=(-5,5), ha='left', fontsize=6, color='black')
+                plt.annotate(f"{mass:.0f}M⊕", (REUV[i], phi_O[i]), textcoords="offset points", xytext=(-5,5), ha='left', fontsize=6, color='black')
+
+        plt.legend()
         plt.show()
 
     @staticmethod
@@ -180,5 +223,63 @@ class ResultsHandler:
         ax2.set_yscale('log')
         ax2.tick_params(axis='y', labelcolor="red")
 
-        plt.tight_layout()
+        fig.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def plot_combined_T_P(results):
+        """Plot temperature at REUV vs pressure with planetary mass labels."""
+        params = ModelParams()
+        mearth = params.mearth
+
+        m_planet = [res['m_planet'] / mearth for res in results] # Earth masses
+        T_REUV = [res['T_REUV'] for res in results] # Temperature in K
+        P_EUV_dyn_ideal = [res['P_EUV'] for res in results] # Pressure in dyn/cm^2
+        P_EUV_Pa = [p * 0.1 for p in P_EUV_dyn_ideal] # Convert dyn/cm^2 to Pa
+        P_EUV_bar = [p * 1e-6 for p in P_EUV_Pa] # Convert Pa to bar
+
+        fig, ax1 = plt.subplots(figsize=(6, 4))
+
+        ax1.plot(T_REUV, P_EUV_Pa, '.-', color='black', linewidth=0.75, label="Pressure (Pa)")
+        ax1.set_xlabel("Temperature at REUV (K)")
+        ax1.set_ylabel("Pressure at REUV (Pa)")
+        ax1.set_yscale('log')
+        ax1.set_xscale('log')
+        ax1.tick_params(axis='y')
+
+        ax2 = ax1.twinx()
+        ax2.plot(T_REUV, P_EUV_bar, color='black', alpha=0, label="Pressure (bar)")
+        ax2.set_ylabel("Pressure at REUV (bar)")
+        ax2.set_yscale('log')
+        ax2.tick_params(axis='y')
+
+        skip_masses = {10, 12, 14}
+        for i, mass in enumerate(m_planet):
+            if round(mass) not in skip_masses:
+                ax1.annotate(f"{mass:.0f}M⊕", (T_REUV[i], P_EUV_Pa[i]), textcoords="offset points", xytext=(-13,3), ha='left', fontsize=6, color='black')
+
+        fig.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def plot_radii_comparison(results):
+        """Plot R_rcb, REUV, RS_flow, and R_b vs Planet Mass."""
+        params = ModelParams()
+        mearth = params.mearth
+        m_planet = [res['m_planet']/mearth for res in results]
+        R_rcb = [res['R_rcb'] for res in results]
+        REUV = [res['REUV'] for res in results]
+        RS_flow = [res['RS_flow'] for res in results]
+        R_b = [res['R_b'] for res in results]
+
+        plt.figure()
+        plt.plot(m_planet, R_rcb, '.-', label="R_rcb")
+        plt.plot(m_planet, REUV, '.-', label="REUV")
+        plt.plot(m_planet, RS_flow, '.-', label="RS_flow")
+        plt.plot(m_planet, R_b, '.-', label="R_b")
+        
+        plt.xlabel("Planet Mass (Earth Masses)")
+        plt.ylabel("Radius (m)")
+        plt.yscale("log")
+        plt.legend()
         plt.show()

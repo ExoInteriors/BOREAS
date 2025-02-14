@@ -103,7 +103,7 @@ class MassLoss:
         REUV solution for the energy-limited (EL) case.
         """
         REUV_lower_bound = r_planet * 1.001
-        REUV_upper_bound = r_planet * 6
+        REUV_upper_bound = r_planet * 5
 
         def root_function(REUV):
             diff, _, _, _ = self.compare_densities_EL(REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon)
@@ -157,7 +157,7 @@ class MassLoss:
         REUV solution for the radiation-limited (RL) case.
         """
         REUV_lower_bound = r_planet * 1.001
-        REUV_upper_bound = r_planet * 6
+        REUV_upper_bound = r_planet * 5
 
         # def root_function(REUV):
         #     return self.compare_densities_RL(REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon)
@@ -263,17 +263,3 @@ class MassLoss:
                 print(f"Error for planet {m_planet/self.params.mearth:.2f} Mearth and radius {r_planet/self.params.rearth:.2f} Rearth: {e}")
         
         return results
-    
-    ### Misc ###
-    
-    def calculate_pressure_ideal_gas(self, rho_EUV, T_REUV):
-        """
-        Calculate pressure values at REUV assuming hydrostatic equilibrium, after Debrecht et al. 2019 framework
-        """
-        k_b = self.params.k_b
-        m_H = self.params.m_H
-        mmw_H = self.params.mmw_H
-
-        P_REUV = rho_EUV * k_b * T_REUV / (mmw_H * m_H) # ideal gas law
-
-        return P_REUV
