@@ -10,13 +10,13 @@ class MassLoss:
         """
         self.params = params
 
-    ### Mass loss ###
+    ### Mass loss rate and sound speed ###
         
     def compute_mdot_only(self, cs, REUV, m_planet):
         """
         Direct computation of the mass-loss rate (Mdot).
         """
-        G, sigma_EUV, mmw_H, m_H = self.params.G, self.params.sigma_EUV, self.params.mmw_H, self.params.m_H
+        G, sigma_EUV, mmw_outflow, m_H = self.params.G, self.params.sigma_EUV, self.params.mmw_outflow, self.params.m_H
         RS_flow = G * m_planet / (2. * cs**2)
 
         if RS_flow >= REUV:
@@ -24,16 +24,20 @@ class MassLoss:
             u = FS.get_parker_wind(r, cs, RS_flow)
             rho = (RS_flow / r)**2 * (cs / u)
             tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
-            rho_s = 1. / ((sigma_EUV / (mmw_H * m_H / 2.)) * tau)
+            rho_s = 1. / ((sigma_EUV / (mmw_outflow * m_H / 2.)) * tau)
             rho *= rho_s
-
+    
+        # this else statement does not mean core-powered mass loss.
+        # this RS_flow is the "hot" one. It can live in the bolometrically heated region
+        # and still lead to a photoevaporative mass loss, as long as the "cold" sonic point
+        # is outside the REUV.
         else:
             r = np.logspace(np.log10(REUV), np.log10(max(5 * RS_flow, 5 * REUV)), 250)
             constant = (1. - 4. * np.log(REUV / RS_flow) - 4. * (RS_flow / REUV) - 1e-13)
             u = FS.get_parker_wind_const(r, cs, RS_flow, constant)
             rho = (RS_flow / r)**2 * (cs / u)
             tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
-            rho_s = 1. / ((sigma_EUV / (mmw_H * m_H / 2.)) * tau)
+            rho_s = 1. / ((sigma_EUV / (mmw_outflow * m_H / 2.)) * tau)
             rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
@@ -62,7 +66,7 @@ class MassLoss:
                 f1 = mdot_difference(lower_bound_initial)
             return brentq(mdot_difference, lower_bound_initial, upper_bound / 10)
 
-    ### Momentum balance ###
+    ### Momentum balance for EL and RL regimes ###
         
     def compare_densities_EL(self, REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon):
         """
@@ -76,7 +80,6 @@ class MassLoss:
         Mdot = self.compute_mdot_only(cs_use, REUV, m_planet)
         Rs = G * m_planet / (2. * cs_use**2)
 
-        # Determine outflow parameters
         if REUV <= Rs:
             u_launch = FS.get_parker_wind_single(REUV, cs_use, Rs)
             u_launch_for_grad = FS.get_parker_wind_single(1.001 * REUV, cs_use, Rs)
@@ -85,14 +88,12 @@ class MassLoss:
             u_launch = cs_use
             Hflow = REUV
 
-        # Timescales
         time_scale_flow = Hflow / u_launch
         time_scale_recom = np.sqrt(Hflow / (FEUV_photon * alpha_rec))
         time_scale_ratio = time_scale_recom / time_scale_flow
         if cs_use < 1.2e6:
             time_scale_ratio = 10.
 
-        # Momentum balance
         rho_flow = Mdot / (4 * np.pi * r_planet**2 * u_launch)
         diff = (rho_EUV * cs_eq**2 - rho_flow * (u_launch**2 + cs_use**2)) / (2. * rho_EUV * cs_eq**2)
 
@@ -147,7 +148,6 @@ class MassLoss:
         Mdot_RL = 4 * np.pi * REUV**2 * m_H * nb * u_RL
         rho_flow = Mdot_RL / (4 * np.pi * r_planet**2 * u_RL)
 
-        # Momentum balance
         diff = (rho_EUV * cs_eq**2 - rho_flow * (u_RL**2 + cs_RL**2)) / (2. * rho_EUV * cs_eq**2)
         
         return diff, rho_EUV, rho_flow
@@ -159,8 +159,6 @@ class MassLoss:
         REUV_lower_bound = r_planet * 1.001
         REUV_upper_bound = r_planet * 5
 
-        # def root_function(REUV):
-        #     return self.compare_densities_RL(REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon)
         def root_function(REUV):
             diff, _, _ = self.compare_densities_RL(REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon)
             return diff
@@ -181,14 +179,13 @@ class MassLoss:
         
         return REUV_solution, rho_EUV, rho_flow
 
-    ### Run mass loss model ###
+    ### Combine everything and run mass loss model ###
 
     def compute_mass_loss_parameters(self, m_planet, r_planet, teq):
         """
         Compute REUV, Mdot, cs, and classify regimes for mass loss.
-        Also filters solutions where RS_flow < REUV.
         """
-        results = []
+        mass_loss_results = []
         for m_planet, r_planet, teq in zip(m_planet, r_planet, teq):
             try:
                 FEUV = self.params.FEUV
@@ -202,11 +199,11 @@ class MassLoss:
                 kappa_p = self.params.kappa_p
 
                 g = G * m_planet / r_planet**2
-                Fbol = 4. * 5.6705e-5 * teq**4
-                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_eq))
+                # Fbol = 4. * 5.6705e-5 * teq**4
+                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_eq)) # H2O in bolometrically heated region
                 rho_photo = g / (kappa_p * cs_eq**2)
 
-                result = {'mass': m_planet, 'radius': r_planet, 'Teq': teq}
+                result = {'m_planet': m_planet, 'r_planet': r_planet, 'Teq': teq}
 
                 # Energy-limited (EL) regime calculations
                 REUV_solution_EL, time_scale_ratio, rho_EUV_EL, rho_flow_EL = self.find_REUV_solution_EL(r_planet, m_planet, rho_photo, cs_eq, FEUV_photon)
@@ -249,17 +246,17 @@ class MassLoss:
                         'regime': 'RL',
                     })
 
-                # Only move on with results if photoevaporation happens: RS_flow < REUV
                 if result['RS_flow'] >= result['REUV']:
-                    results.append(result)
+                    mass_loss_results.append(result)
                 else:
                     print(
-                        f"Excluded: RS_flow ({result['RS_flow']:.2e}) < REUV ({result['REUV']:.2e}) "
+                        f"Warning: Check for CPML. RS_flow ({result['RS_flow']:.2e}) < REUV ({result['REUV']:.2e}) "
                         f"for planet mass={m_planet/self.params.mearth:.2f} M_earth, "
                         f"radius={r_planet/self.params.rearth:.2f} R_earth."
                     )
+                    mass_loss_results.append(result)
 
             except Exception as e:
                 print(f"Error for planet {m_planet/self.params.mearth:.2f} Mearth and radius {r_planet/self.params.rearth:.2f} Rearth: {e}")
         
-        return results
+        return mass_loss_results
