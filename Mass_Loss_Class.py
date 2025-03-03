@@ -16,16 +16,13 @@ class MassLoss:
         """
         Direct computation of the mass-loss rate (Mdot).
         """
-        G, sigma_EUV, mmw_outflow, m_H = self.params.G, self.params.sigma_EUV, self.params.mmw_outflow, self.params.m_H
-        RS_flow = G * m_planet / (2. * cs**2)
+        G, sigma_EUV, m_H = self.params.G, self.params.sigma_EUV, self.params.m_H
+        mmw_outflow = self.params.get_param('mmw_outflow') # always use the latest mmw_outflow
+        RS_flow = G * m_planet / (2. * cs**2) # "hot" sonic point radius
 
         if RS_flow >= REUV:
             r = np.logspace(np.log10(REUV), np.log10(max(5 * RS_flow, 5 * REUV)), 250)
             u = FS.get_parker_wind(r, cs, RS_flow)
-            rho = (RS_flow / r)**2 * (cs / u)
-            tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
-            rho_s = 1. / ((sigma_EUV / (mmw_outflow * m_H / 2.)) * tau)
-            rho *= rho_s
     
         # this else statement does not mean core-powered mass loss.
         # this RS_flow is the "hot" one. It can live in the bolometrically heated region
@@ -35,10 +32,11 @@ class MassLoss:
             r = np.logspace(np.log10(REUV), np.log10(max(5 * RS_flow, 5 * REUV)), 250)
             constant = (1. - 4. * np.log(REUV / RS_flow) - 4. * (RS_flow / REUV) - 1e-13)
             u = FS.get_parker_wind_const(r, cs, RS_flow, constant)
-            rho = (RS_flow / r)**2 * (cs / u)
-            tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
-            rho_s = 1. / ((sigma_EUV / (mmw_outflow * m_H / 2.)) * tau)
-            rho *= rho_s
+
+        rho = (RS_flow / r)**2 * (cs / u)
+        tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
+        rho_s = 1. / ((sigma_EUV / (mmw_outflow * m_H / 2.)) * tau)
+        rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
 
