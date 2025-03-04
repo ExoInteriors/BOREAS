@@ -11,7 +11,6 @@ class ModelParams:
         self.mmw_H = 2.35                                   # Mean molecular weight (H/He-ish envelope)
         self.mmw_eq = 2 * self.am_h + self.am_o             # Mean molecular weight (water) at bolometrically heated region
         self.mmw_outflow = ((2 * self.am_h + self.am_o)/3)  # Mean molecular weight (H and O) assuming full dissociation of water
-        self.mmw_outflow = 1
 
         self.k_b = 1.380649e-16         # Boltzmann constant, erg K-1
         self.G = 6.67430e-8             # Gravitational constant, cm3 g-1 s-2
@@ -21,7 +20,7 @@ class ModelParams:
         # --- Model-specific parameters
         self.kappa_p = 1                # original value 1e-2 for H/He, opacity to outgoing thermal radiation, i.e. mean opacity in infrared
         self.E_photon = 20 * 1.6e-12    # photon energy
-        self.FEUV = 450                 # received EUV flux, ergs cm-2 s-1
+        self.FEUV = 450.                # received EUV flux, ergs cm-2 s-1
         self.sigma_EUV = 1.89e-18       # EUV cross-section (of H? H2?), cm2
         self.alpha_rec = 2.6e-13        # Recombination coefficient, cm3 s-1
         self.eff = 0.3                  # Mass-loss efficiency factor

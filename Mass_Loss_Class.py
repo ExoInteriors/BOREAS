@@ -249,8 +249,7 @@ class MassLoss:
                 else:
                     print(
                         f"Warning: Check for CPML. RS_flow ({result['RS_flow']:.2e}) < REUV ({result['REUV']:.2e}) "
-                        f"for planet mass={m_planet/self.params.mearth:.2f} M_earth, "
-                        f"radius={r_planet/self.params.rearth:.2f} R_earth."
+                        f"for planet mass={m_planet/self.params.mearth:.2f} M_earth"
                     )
                     mass_loss_results.append(result)
 
