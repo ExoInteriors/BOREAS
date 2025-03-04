@@ -1,0 +1,6 @@
+{
+    "Kepler-36 b": {"radius": 1.544, "mass": 4.28, "teq": 979, "FEUV": 334000000},
+    "Kepler-36 c": {"radius": 3.76, "mass": 8.08, "teq": 92, "FEUV": 260000000},
+    "TOI-431 b": {"radius": 1.28, "mass": 3.07, "teq": 1862, "FEUV": 70286},
+    "TOI-431 d": {"radius": 3.29, "mass": 9.9, "teq": 633, "FEUV": 935}
+}
