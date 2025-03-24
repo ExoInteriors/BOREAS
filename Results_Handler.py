@@ -1,6 +1,6 @@
-import pickle
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.cm import get_cmap
 from Parameters import ModelParams
 
 class ResultsHandler:
@@ -34,11 +34,11 @@ class ResultsHandler:
         fig, ax1 = plt.subplots()
 
         ax1.set_xlabel("$c_{s}$ (cm/s)")
-        ax1.set_ylabel("$R_{EUV}$ (cm)")
-        ax1.plot(cs, REUV, '.-')
+        ax1.set_ylabel("$R_{EUV}$ (cm)", color="black")
+        ax1.plot(cs, REUV, '.-', color="black")
+        ax1.tick_params(axis='y', labelcolor="black")
         ax1.set_xscale('log')
         ax1.set_yscale('log')
-        ax1.tick_params(axis='y')
 
         ax2 = ax1.twinx()
         ax2.set_ylabel("$R_{EUV}/R_{planet}$", color="orangered")
@@ -101,8 +101,146 @@ class ResultsHandler:
                 plt.annotate(f"{mass:.0f}M⊕", (REUV[i], phi_H[i]), textcoords="offset points", xytext=(-5,5), ha='left', fontsize=10, color='black')
                 plt.annotate(f"{mass:.0f}M⊕", (REUV[i], phi_O[i]), textcoords="offset points", xytext=(-5,5), ha='left', fontsize=10, color='black')
 
-        plt.title("No fractionation (mmw of outflow = 6)")
         plt.legend()
+        plt.show()
+
+    @staticmethod
+    def plot_phi_vs_m_planet_across_fluxes(results):
+        "phi_H and phi_O vs. planet mass for multiple fluxes."
+        params = ModelParams()
+        mearth = params.mearth
+
+        flux_values = [fd['FEUV'] for fd in results]
+        flux_min = min(flux_values)
+        flux_max = max(flux_values)
+
+        cmap = get_cmap("inferno_r")
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
+
+        for flux_data in results:
+            flux = flux_data['FEUV']
+            results_list = flux_data['fractionation_results']
+
+            # Map flux to a color fraction between 0 and 1
+            if flux_max > flux_min:
+                color_fraction = (flux - flux_min) / (flux_max - flux_min)
+            else:
+                color_fraction = 0.5
+
+            color = cmap(color_fraction)
+
+            m_planet = []
+            phi_H = []
+            phi_O = []
+
+            for result in results_list:
+                if 'phi_H' in result and 'phi_O' in result:
+                    m_planet.append(result['m_planet'] / mearth)
+                    phi_H.append(result['phi_H'])
+                    phi_O.append(result['phi_O'])
+
+            ax1.plot(m_planet, phi_H, '.-', label=f"Flux={flux}", color=color)
+            ax2.plot(m_planet, phi_O, '.-', label=f"Flux={flux}", color=color)
+
+        # --- Top subplot (phi_H) ---
+        ax1.set_ylabel(r"$\phi_H$ (g cm$^{-2}$ s$^{-1}$)")
+        ax1.set_yscale('log')
+        ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+        # --- Bottom subplot (phi_O) ---
+        ax2.set_xlabel("Planet Mass (Earth Masses)")
+        ax2.set_ylabel(r"$\phi_O$ (g cm$^{-2}$ s$^{-1}$)")
+        ax2.set_yscale('log')
+        ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+        plt.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def plot_phi_vs_flux_across_masses(all_flux_results):
+        """phi_H and phi_O vs. the EUV flux (FEUV), with a separate line for each planet mass."""
+        params = ModelParams()
+        mearth = params.mearth
+
+        # Dictionary to gather data by planet mass
+        # mass_map[mass_in_earths] = {
+        #    'flux': [flux1, flux2, ...],
+        #    'phi_H': [phi_H1, phi_H2, ...],
+        #    'phi_O': [phi_O1, phi_O2, ...]
+        # }
+        mass_map = {}
+
+        for flux_data in all_flux_results:
+            flux = flux_data['FEUV']
+            results_list = flux_data['fractionation_results']
+
+            for planet_res in results_list:
+                if 'phi_H' not in planet_res or 'phi_O' not in planet_res:
+                    continue
+                
+                # 1) Convert raw planet mass to Earth-mass float
+                raw_mass = float(planet_res['m_planet'] / mearth)
+
+                # 2) Round or otherwise convert to remove tiny float differences
+                m_key = round(raw_mass, 4)
+
+                # 3) Ensure the dictionary entry exists
+                if m_key not in mass_map:
+                    mass_map[m_key] = {
+                        'flux': [],
+                        'phi_H': [],
+                        'phi_O': []
+                    }
+
+                # 4) Safely append
+                mass_map[m_key]['flux'].append(flux)
+                mass_map[m_key]['phi_H'].append(planet_res['phi_H'])
+                mass_map[m_key]['phi_O'].append(planet_res['phi_O'])
+                
+        # -- Sort each mass's data by ascending flux for nice plotting --
+        for m_key, data in mass_map.items():
+            combined = sorted(
+                zip(data['flux'], data['phi_H'], data['phi_O']),
+                key=lambda x: x[0] # sort by flux
+            )
+            data['flux']  = [c[0] for c in combined]
+            data['phi_H'] = [c[1] for c in combined]
+            data['phi_O'] = [c[2] for c in combined]
+
+        # color lines by planet mass
+        all_masses = sorted(mass_map.keys())
+        mass_min = min(all_masses)
+        mass_max = max(all_masses)
+
+        cmap = get_cmap("copper_r")
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
+        
+        for m_key in all_masses:
+            data = mass_map[m_key]
+            if mass_max > mass_min:
+                color_fraction = (m_key - mass_min) / (mass_max - mass_min)
+            else:
+                color_fraction = 0.5
+
+            color = cmap(color_fraction)
+
+            ax1.plot(data['flux'], data['phi_H'], '.-', label=f"{m_key:.2f} M⊕", color=color)
+            ax2.plot(data['flux'], data['phi_O'], '.-', label=f"{m_key:.2f} M⊕", color=color)
+
+        # top subplot (phi_H)
+        ax1.set_ylabel(r"$\phi_\mathrm{H}$ [g cm$^{-2}$ s$^{-1}$]")
+        ax1.set_yscale('log')
+        ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+        # bottom subplot (phi_O)
+        ax2.set_xlabel("EUV Flux (erg cm$^{-2}$ s$^{-1}$)")
+        ax2.set_ylabel(r"$\phi_\mathrm{O}$ [g cm$^{-2}$ s$^{-1}$]")
+        ax2.set_yscale('log')
+        ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+        plt.tight_layout()
         plt.show()
 
     @staticmethod
@@ -195,7 +333,7 @@ class ResultsHandler:
         plt.figure()
 
         for label in timescales.keys():
-            plt.plot(m_planet, water_loss_EOs_phi_H[label], '.-', label=f"{label} (phi_H-based)")
+            plt.plot(m_planet, water_loss_EOs_phi_H[label], '.-', label=f"{label}")
 
         plt.xlabel("Planet Mass (Earth Masses)")
         plt.ylabel("Water Loss (Earth Oceans)")
