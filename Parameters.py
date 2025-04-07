@@ -16,6 +16,7 @@ class ModelParams:
         self.G = 6.67430e-8             # Gravitational constant, cm3 g-1 s-2
         self.rearth = 6.371e8           # Radius earth in cgs
         self.mearth = 5.97424e27        # Mass earth in cgs
+        self.stefan_boltzmann = 5.67e-8 # Stefan-Boltzmann constant in W m-2 K-4
 
         # --- Model-specific parameters
         self.kappa_p = 1                # original value 1e-2 for H/He, opacity to outgoing thermal radiation, i.e. mean opacity in infrared
@@ -24,6 +25,9 @@ class ModelParams:
         self.sigma_EUV = 1.89e-18       # EUV cross-section (of H? H2?), cm2
         self.alpha_rec = 2.6e-13        # Recombination coefficient, cm3 s-1
         self.eff = 0.3                  # Mass-loss efficiency factor
+        self.albedo = 0.3               # Albedo of planet
+        self.beta_planet = 0.75         # Fraction of the planet's surface that re-emites radiation
+        self.epsilon = 1.               # Emissivity of the planet
 
     def update_param(self, param_name, value):
         """Dynamically update a parameter value."""
