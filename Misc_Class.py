@@ -1,3 +1,5 @@
+import numpy as np
+
 class Misc:
     def __init__(self, params):
         """
@@ -30,16 +32,18 @@ class Misc:
 
         return R_b
     
-    def calculate_R_rcb(self, M_p, T_rcb):
+    def get_flux_range(self, Teq):
         """
-        Estimate the Radiative-Convective Boundary (RCB) radius.
+        Return a flux range (an array) for a given equilibrium temperature.
         """
-        G = self.params.G
-        k_B = self.params.k_b
-        m_H = self.params.m_H
-        mmw_eq = self.params.mmw_eq
-        mmw_H = self.params.mmw_H
-
-        R_rcb = (G * M_p * mmw_H * m_H) / (k_B * T_rcb)
-
-        return R_rcb
+        if np.isclose(Teq, 300):
+            return np.logspace(np.log10(0.3175), np.log10(1968.2999), 10)
+        elif np.isclose(Teq, 400):
+            return np.logspace(np.log10(1.004), np.log10(6220.7999), 10)
+        elif np.isclose(Teq, 1000):
+            return np.logspace(np.log10(39.2057), np.log10(242999.9999), 10)
+        elif np.isclose(Teq, 2000):
+            return np.logspace(np.log10(627.2926), np.log10(3887999.9999), 10)
+        else:
+            # Default range if no specific Teq match.
+            return np.logspace(np.log10(100), np.log10(10000), 10)
