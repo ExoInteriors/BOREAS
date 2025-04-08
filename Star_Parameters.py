@@ -40,9 +40,9 @@ class StarParams():
         t_sat = 1E-1 / self.star_mass
 
         if self.star_age < t_sat:
-            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.stefan_boltzmann * saturation_ratio * self.Teq**4 * 1E3 / ((1 - self.params.albedo) * self.star_mass**0.5)
+            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.k_b_SI * saturation_ratio * self.Teq**4 * 1E3 / ((1 - self.params.albedo) * self.star_mass**0.5)
         else:
-            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.stefan_boltzmann * saturation_ratio * (self.star_age/ t_sat)**alpha * self.Teq**4 * 1E3 / ((1 - self.params.albedo) * self.star_mass**0.5)
+            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.k_b_SI * saturation_ratio * (self.star_age/ t_sat)**alpha * self.Teq**4 * 1E3 / ((1 - self.params.albedo) * self.star_mass**0.5)
 
         self.params.FEUV = FEUV
 

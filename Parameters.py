@@ -16,7 +16,7 @@ class ModelParams:
         self.G = 6.67430e-8             # Gravitational constant, cm3 g-1 s-2
         self.rearth = 6.371e8           # Radius earth in cgs
         self.mearth = 5.97424e27        # Mass earth in cgs
-        self.stefan_boltzmann = 5.67e-8 # Stefan-Boltzmann constant in W m-2 K-4
+        self.k_b_SI = 5.67e-8           # Stefan-Boltzmann constant in W m-2 K-4
 
         # --- Model-specific parameters
         self.kappa_p = 1                # original value 1e-2 for H/He, opacity to outgoing thermal radiation, i.e. mean opacity in infrared
