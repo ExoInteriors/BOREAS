@@ -100,11 +100,10 @@ class StarParams():
         /!\ This method can be used in 2 ways: either a star_age value is provided when the method is called or the value of
         the star_age attribute of the StarParams object will be used.
 
-        Computes the maximal and minimal XUV flux possible for a given star age and planet equilibrium temperature with the star mass being a free parameter. Uses Rogers et al 2021 and Baraffe et al. 2015.
+        Computes the range of XUV flux possible for a given star age and planet equilibrium temperature with the star mass being a free parameter. Uses Rogers et al 2021 and Baraffe et al. 2015.
         
         Return:
-        F_EUV_max: float, maximum XUV flux for the given star age and equilibrium temperature (in erg/s/cm2)
-        F_EUV_min: float, minimum XUV flux for the given star age and equilibrium temperature (in erg/s/cm2)
+        FEUV_range: numpy array, range of XUV flux for the given star age and equilibrium temperature (in erg/s/cm2)
         '''
 
         if star_age is None:
@@ -119,15 +118,16 @@ class StarParams():
         F_EUV_max = np.max(F_EUV)
         F_EUV_min = np.min(F_EUV)
 
-        return F_EUV_max, F_EUV_min
+        FEUV_range = np.logspace(np.log10(F_EUV_min), np.log10(F_EUV_max), 10)
+
+        return FEUV_range
     
     def get_FEUV_range_any_age(self):
         '''
-        Computes the maximal and minimal XUV flux possible for a given star age and planet equilibrium temperature with the star mass  and age being free parameters. Uses Rogers et al 2021 and Baraffe et al. 2015.
+        Computes the range of XUV flux possible for a given star age and planet equilibrium temperature with the star mass  and age being free parameters. Uses Rogers et al 2021 and Baraffe et al. 2015.
 
         Return:
-        F_EUV_max: float, maximum XUV flux for this equilibrium temperature (in erg/s/cm2)
-        F_EUV_min: float, minimum XUV flux for this equilibrium temperature (in erg/s/cm2)
+        FEUV_range: numpy array, range of XUV flux for this equilibrium temperature (in erg/s/cm2)
         '''
         
         star_age_ar = np.linspace(0.001, 13.4, 1000) # the maximum age explored here is the age of the oldest Milky Way stars
@@ -135,9 +135,12 @@ class StarParams():
         F_EUV_min_inter = np.empty_like(star_age_ar)
 
         for i in range(len(star_age_ar)):
-            F_EUV_max_inter[i], F_EUV_min_inter[i] = self.get_FEUV_range_from_age(star_age_ar[i])
+            F_EUV_inter = self.get_FEUV_range_from_age(star_age_ar[i])
+            F_EUV_max_inter[i], F_EUV_min_inter[i] = F_EUV_inter[-1], F_EUV_inter[0]
 
         F_EUV_max = np.max(F_EUV_max_inter)
         F_EUV_min = np.min(F_EUV_min_inter)
 
-        return F_EUV_max, F_EUV_min
+        FEUV_range = np.logspace(np.log10(F_EUV_min), np.log10(F_EUV_max), 10)
+
+        return FEUV_range
