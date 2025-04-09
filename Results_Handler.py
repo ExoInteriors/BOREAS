@@ -120,7 +120,7 @@ class ResultsHandler:
 
         for flux_data in results:
             flux = flux_data['FEUV']
-            results_list = flux_data['fractionation_results']
+            results_list = flux_data['end_results']
 
             # Map flux to a color fraction between 0 and 1
             if flux_max > flux_min:
@@ -173,7 +173,7 @@ class ResultsHandler:
 
         for flux_data in all_flux_results:
             flux = flux_data['FEUV']
-            results_list = flux_data['fractionation_results']
+            results_list = flux_data['end_results']
 
             for planet_res in results_list:
                 if 'phi_H' not in planet_res or 'phi_O' not in planet_res:

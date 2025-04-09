@@ -134,15 +134,17 @@ class Fractionation:
             mmw_outflow = params.get_param('mmw_outflow') # start with value from parameter file
             prev_mmw_outflow = None # track for convergence
             
+            T_outflow = self.compute_T_outflow(cs)
+            if Teq >= T_outflow:
+                print(f"Excluded: T_eq ({Teq:.2f} K) > T_outflow ({T_outflow:.2f} K) for planet mass={m_planet/params.mearth:.2f} M_earth.")
+                continue
+        
             for iteration in range(max_iter):
                 # ---------- T & P at R_EUV, and Bondi radius ----------
                 T_outflow = self.compute_T_outflow(cs)
                 P_EUV = misc.calculate_pressure_ideal_gas(result['rho_EUV'], T_outflow)
                 R_b = misc.calculate_R_b(m_planet, cs)
 
-                if Teq >= T_outflow:
-                    print(f"Excluded: T_eq ({Teq:.2f} K) > T_outflow ({T_outflow:.2f} K) for planet mass={m_planet/params.mearth:.2f} M_earth.")
-                    continue
                 
                 # ---------- Fractionation model ----------
                 b_i, mass_diff, flux_total, reservoir_ratio = self.compute_fractionation_params(cs, REUV, Mdot)
