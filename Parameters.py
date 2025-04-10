@@ -18,7 +18,6 @@ class ModelParams:
 
         # - Mean molecular weights for fully dissociated species assuming *strong* photoevaporation that fully dissociates the species
         self.mmw_HHe_outflow = self.mmw_H                       # 1, ignores He, full dissociation gives free H atoms (mmw = 1 per H atom)
-        self.mmw_H2O_outflow = (2 * self.am_h + self.am_o) / 3  # = (2+16) / 3 = 6, max mean molecular weight (H, H, and O) assuming full dissociation (H2O -> 2H + O)
         # # - To properly include Helium and not ignore it:
         # X_H         = 0.70
         # X_He        = 0.30
@@ -28,14 +27,16 @@ class ModelParams:
         # N_He = X_He / mmw_He                                    # Number of free helium atoms per unit mass
         # N_total_HHe = N_H + N_He
         # self.mmw_HHe_outflow = 1 / N_total_HHe                  # effective mean molecular weight including helium. ~1.29 given X_H=0.70 and X_He=0.30.
-
+        
+        self.mmw_H2O_outflow = (2 * self.am_h + self.am_o) / 3  # = (2+16) / 3 = 6, max mean molecular weight (H, H, and O) assuming full dissociation (H2O -> 2H + O)
+        
         # - For mixture of HHe an H2O
         X_HHe   = 0.9
         X_H2O   = 0.1
         N_HHe   = X_HHe / self.mmw_HHe_outflow                  # = 0.9 / 1 = 0.9
         N_H2O   = X_H2O / self.mmw_H2O_outflow                  # = 0.1 / 6 ≈ 0.01667
         N_tot   = N_HHe + N_H2O                                 # total free particles per unit mass
-        self.mmw_HHe_10H2O_outflow = 1 / N_tot                  # Max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
+        self.mmw_HHe_10H2O_outflow = 1 / N_tot                  # ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
 
         self.k_b    = 1.380649e-16      # Boltzmann constant, erg K-1
         self.k_b_SI = 5.670374419e-8    # Boltzmann constant (SI) W m-2 K-1

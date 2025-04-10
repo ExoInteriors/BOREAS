@@ -17,7 +17,9 @@ class MassLoss:
         Direct computation of the mass-loss rate (Mdot).
         """
         G, sigma_EUV, m_H = self.params.G, self.params.sigma_EUV, self.params.m_H
-        mmw_outflow = self.params.get_param('mmw_outflow') # always use the latest mmw_outflow
+        mmw_HHe = self.params.mmw_HHe
+        mmw_H2O_outflow = self.params.get_param('mmw_H2O_outflow') # always use the latest value
+        mmw_HHe_10H2O_outflow = self.params.get_param('mmw_HHe_10H2O_outflow') # always use the latest value
         RS_flow = G * m_planet / (2. * cs**2) # "hot" sonic point radius
 
         if RS_flow >= REUV:
@@ -35,7 +37,9 @@ class MassLoss:
 
         rho = (RS_flow / r)**2 * (cs / u)
         tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
-        rho_s = 1. / ((sigma_EUV / (mmw_outflow * m_H / 2.)) * tau)
+        # rho_s = 1. / ((sigma_EUV / (mmw_HHe * m_H / 2.)) * tau)               # <----- H2/He in outflow
+        # rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
+        rho_s = 1. / ((sigma_EUV / (mmw_HHe_10H2O_outflow * m_H / 2.)) * tau) # <----- H2/He & 10% H2O outflow (dissociated)
         rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
@@ -46,7 +50,7 @@ class MassLoss:
         """
         Calculate the energy-limited mass loss rate and corresponding sound speed.
         """
-        G, FEUV, eff = self.params.G, self.params.FEUV, self.params.eff
+        G, FEUV, eff = self.params.G, self.params.get_param('FEUV'), self.params.eff
         Mdot_EL = eff * np.pi * REUV**3 / (4 * G * m_planet) * FEUV
 
         lower_bound_initial, upper_bound = 2e5, 1e13
@@ -186,20 +190,37 @@ class MassLoss:
         mass_loss_results = []
         for m_planet, r_planet, teq in zip(m_planet, r_planet, teq):
             try:
-                FEUV = self.params.FEUV
-                alpha_rec = self.params.alpha_rec
+                FEUV = self.params.get_param('FEUV')
                 E_photon = self.params.E_photon
                 FEUV_photon = FEUV / E_photon
+                alpha_rec = self.params.alpha_rec
                 G = self.params.G
                 k_b = self.params.k_b
-                mmw_eq = self.params.mmw_eq
+
                 m_H = self.params.m_H
-                kappa_p = self.params.kappa_p
+
+                mmw_HHe = self.params.mmw_HHe
+                mmw_H2O = self.params.mmw_H2O
+                mmw_HHe_10H2O = self.params.mmw_HHe_10H2O
+
+                kappa_p_HHe = self.params.kappa_p_HHe
+                kappa_p_H2O = self.params.kappa_p_H2O
+                kappa_p_HHe_10H2O = self.params.kappa_p_HHe_10H2O
 
                 g = G * m_planet / r_planet**2
                 # Fbol = 4. * 5.6705e-5 * teq**4
-                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_eq)) # H2O in bolometrically heated region
-                rho_photo = g / (kappa_p * cs_eq**2)
+
+                ### for H
+                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe)) # <---- HHe in bolometrically heated region (non-dissociated)
+                # rho_photo = g / (kappa_p_HHe * cs_eq**2)
+
+                ### for H2O
+                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O)) # <---- H2O in bolometrically heated region (non-dissociated)
+                # rho_photo = g / (kappa_p_H2O * cs_eq**2)
+
+                ### for HHe and H2O
+                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_10H2O)) # <---- HHe and H2O in bolometrically heated region (non-dissociated)
+                rho_photo = g / (kappa_p_HHe_10H2O * cs_eq**2)
 
                 result = {'m_planet': m_planet, 'r_planet': r_planet, 'Teq': teq}
 
