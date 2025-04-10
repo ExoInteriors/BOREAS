@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.cm import get_cmap
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
+from matplotlib.lines import Line2D
 from Parameters import ModelParams
 
 class ResultsHandler:
@@ -140,26 +143,26 @@ class ResultsHandler:
                     phi_H.append(result['phi_H'])
                     phi_O.append(result['phi_O'])
 
-            ax1.plot(m_planet, phi_H, '.-', label=f"Flux={flux}", color=color)
-            ax2.plot(m_planet, phi_O, '.-', label=f"Flux={flux}", color=color)
+            ax1.plot(m_planet, phi_H, '.-', label=flux, color=color)
+            ax2.plot(m_planet, phi_O, '.-', label=flux, color=color)
 
         # --- Top subplot (phi_H) ---
         ax1.set_ylabel(r"$\phi_H$ (g cm$^{-2}$ s$^{-1}$)")
         ax1.set_yscale('log')
-        ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        ax1.legend(title='EUV flux (ergs/cm2/s)', loc='center left', bbox_to_anchor=(1, 0.5))
 
         # --- Bottom subplot (phi_O) ---
         ax2.set_xlabel("Planet Mass (Earth Masses)")
         ax2.set_ylabel(r"$\phi_O$ (g cm$^{-2}$ s$^{-1}$)")
         ax2.set_yscale('log')
-        ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        ax2.legend(title='EUV flux (ergs/cm2/s)', loc='center left', bbox_to_anchor=(1, 0.5))
 
         plt.tight_layout()
         plt.show()
 
     @staticmethod
     def plot_phi_vs_flux_across_masses(all_flux_results):
-        """phi_H and phi_O vs. the EUV flux (FEUV), with a separate line for each planet mass."""
+        """X-axes: phi_H and phi_O, Y-axis: EUV flux (FEUV), with a separate line for each planet mass."""
         params = ModelParams()
         mearth = params.mearth
 
@@ -215,7 +218,7 @@ class ResultsHandler:
 
         cmap = get_cmap("copper_r")
 
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6), sharex=True)
         
         for m_key in all_masses:
             data = mass_map[m_key]
@@ -232,16 +235,196 @@ class ResultsHandler:
         # top subplot (phi_H)
         ax1.set_ylabel(r"$\phi_\mathrm{H}$ [g cm$^{-2}$ s$^{-1}$]")
         ax1.set_yscale('log')
-        ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        ax1.set_xscale('log')
 
         # bottom subplot (phi_O)
         ax2.set_xlabel("EUV Flux (erg cm$^{-2}$ s$^{-1}$)")
         ax2.set_ylabel(r"$\phi_\mathrm{O}$ [g cm$^{-2}$ s$^{-1}$]")
         ax2.set_yscale('log')
-        ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+        # single legend
+        handles, labels = ax1.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='center right', bbox_to_anchor=(1, 0.5))
+    
+        plt.tight_layout()
+        plt.show()
+
+
+    @staticmethod
+    def plot_mmw_vs_masses_across_fluxes(all_flux_results):
+        """X-axis: mmw_outflow, Y-axis: planet mass, lines for each FEUV."""
+        params = ModelParams()
+        mearth = params.mearth
+
+        flux_map = {}
+
+        for flux_data in all_flux_results:
+            flux = flux_data['FEUV']
+            results_list = flux_data['end_results']
+
+            if flux not in flux_map:
+                flux_map[flux] = {
+                    'mmw': [],
+                    'm_planet': []
+                }
+
+            for planet_res in results_list:
+                if 'mmw_outflow' not in planet_res:
+                    continue
+
+                mmw = planet_res['mmw_outflow']
+                mass_earths = planet_res['m_planet'] / mearth
+
+                flux_map[flux]['mmw'].append(mmw)
+                flux_map[flux]['m_planet'].append(mass_earths)
+
+        # Sort each flux's data by mmw so lines go left-to-right
+        for flux, data in flux_map.items():
+            combined = sorted(zip(data['m_planet'], data['mmw']), key=lambda x: x[0])
+            data['m_planet'] = [c[0] for c in combined]
+            data['mmw']      = [c[1] for c in combined]
+
+        # color lines by flux
+        all_fluxes = sorted(flux_map.keys())
+        flux_min   = min(all_fluxes)
+        flux_max   = max(all_fluxes)
+
+        cmap = get_cmap("Wistia")
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+
+        for flux in all_fluxes:
+            data = flux_map[flux]
+            if flux_max > flux_min:
+                color_fraction = (flux - flux_min) / (flux_max - flux_min)
+            else:
+                color_fraction = 0.5
+            color = cmap(color_fraction)
+
+            ax.plot(data['m_planet'], data['mmw'], '.-', label={flux}, color=color)
+
+        ax.set_ylabel("Mean Molecular Weight of Outflow")
+        ax.set_xlabel("Planet Mass (Earth Masses)")
+        # ax.set_yscale('log')
+        ax.set_xscale('linear')
+        ax.legend(loc='best',  title='EUV flux')
 
         plt.tight_layout()
         plt.show()
+
+    @staticmethod
+    def plot_mmw_vs_flux_across_masses(all_flux_results):
+        """X-axis: mmw_outflow, Y-axis: FEUV, lines for each planet mass."""
+
+        params = ModelParams()
+        mearth = params.mearth
+
+        mass_map = {}
+
+        for flux_data in all_flux_results:
+            flux = flux_data['FEUV']
+            results_list = flux_data['end_results'] # each is a list of planet dicts
+
+            for planet_res in results_list:
+                if 'mmw_outflow' not in planet_res:
+                    continue
+
+                m_earth = planet_res['m_planet'] / mearth
+                mmw     = planet_res['mmw_outflow']
+
+                m_key = round(float(m_earth), 4) # round to avoid float issues
+
+                if m_key not in mass_map:
+                    mass_map[m_key] = {
+                        'mmw': [],
+                        'flux': []
+                    }
+
+                mass_map[m_key]['mmw'].append(mmw)
+                mass_map[m_key]['flux'].append(flux)
+
+        # For each planet mass, sort the data by mmw_outflow so lines connect in ascending order of mmw
+        for m_key, data in mass_map.items():
+            combined = sorted(zip(data['flux'], data['mmw']), key=lambda x: x[0])  
+            data['flux']  = [c[0] for c in combined]
+            data['mmw'] = [c[1] for c in combined]
+
+        # For coloring lines by planet mass
+        all_masses = sorted(mass_map.keys())
+        mass_min   = min(all_masses)
+        mass_max   = max(all_masses)
+
+        cmap = get_cmap("Wistia")
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+
+        for m_key in all_masses:
+            data = mass_map[m_key]
+            if mass_max > mass_min:
+                color_fraction = (m_key - mass_min) / (mass_max - mass_min)
+            else:
+                color_fraction = 0.5
+            color = cmap(color_fraction)
+
+            ax.plot(data['flux'], data['mmw'], '.-', label=f"{m_key:.2f} $M_\oplus$", color=color)
+
+        ax.set_ylabel("Mean Molecular Weight of Outflow")
+        ax.set_xlabel("EUV Flux (erg cm$^{-2}$ s$^{-1}$)")
+        # ax.set_yscale('log')
+        ax.set_xscale('log')
+        ax.legend(loc='best')
+
+        plt.tight_layout()
+        plt.show()
+
+
+    @staticmethod
+    def plot_regime_scatter(all_flux_results):
+        """Scatter plot showing which regime each planet is in. X-axis: FEUV, Y-axis: planet mass."""
+        params = ModelParams()
+        mearth = params.mearth
+
+        x_vals = [] # will store flux
+        y_vals = [] # will store planet mass (in Earth masses)
+        colors = [] # store color depending on regime
+
+        for flux_data in all_flux_results:
+            flux = flux_data['FEUV']
+            results_list = flux_data['end_results']
+            for planet_res in results_list:
+                # Retrieve the regime if it exists; skip if not present
+                regime = planet_res.get('regime')
+                if regime is None:
+                    continue
+
+                mass_earth = planet_res['m_planet'] / mearth
+
+                x_vals.append(flux)
+                y_vals.append(mass_earth)
+
+                # colors
+                if regime == 'RL':
+                    colors.append('red')
+                else:
+                    colors.append('blue')
+
+        plt.figure(figsize=(3, 3))
+        plt.scatter(x_vals, y_vals, c=colors, alpha=0.8)
+
+        plt.xlabel("EUV Flux (erg cm$^{-2}$ s$^{-1}$)")
+        plt.ylabel("Planet Mass (Earth Masses)")
+        plt.yscale('linear')
+        plt.xscale('log')
+
+        legend_elems = [
+            Line2D([0], [0], marker='o', color='w', label='EL', markerfacecolor='blue', markersize=8),
+            Line2D([0], [0], marker='o', color='w', label='RL', markerfacecolor='red', markersize=8)
+        ]
+        plt.legend(handles=legend_elems, loc='best')
+
+        plt.tight_layout()
+        plt.show()
+
 
     @staticmethod
     def plot_combined_T_P(results):
@@ -340,4 +523,213 @@ class ResultsHandler:
         plt.yscale("log")
         plt.legend()
 
+        plt.show()
+
+    @staticmethod
+    def plot1(df):
+        """
+        Plot total mass loss rate (Mdot) versus planetary mass (in Earth masses).
+        - x-axis: Planet mass (Earth masses, on a log scale)
+        - y-axis: Total mass loss rate (Mdot, on a log scale)
+        - Line style: Different for each Teq (for example: solid, dashed, dotted, dash-dot)
+        - Marker/line color: Encodes FEUV (with a colorbar)
+        
+        Expected DataFrame columns:
+            'm_planet' : planetary mass (cgs)
+            'Mdot'     : total mass loss rate
+            'Teq'      : equilibrium temperature (K)
+            'FEUV'     : flux (erg cm^-2 s^-1)
+        """
+        params = ModelParams()
+        mearth = params.mearth
+
+        df['m_planet_Earth'] = df['m_planet'] / mearth # convert to earth masses for plotting
+
+        line_styles = {300: '-', 400: '--', 1000: '-.', 2000: ':'} # styles for different Teq lines
+        unique_Teq = np.sort(df['Teq'].unique())
+        for teq in unique_Teq:
+            if teq not in line_styles:
+                line_styles[teq] = '-' # default solid line
+
+        cmap = get_cmap("viridis") # colormap for FEUV
+        # norm = mcolors.Normalize(vmin=df['FEUV'].min(), vmax=df['FEUV'].max())
+        norm = mcolors.LogNorm(vmin=df['FEUV'].min(), vmax=df['FEUV'].max())
+
+        fig, ax = plt.subplots(figsize=(10,8))
+        
+        # Group the DataFrame by FEUV and Teq values: for a given combination of flux and temperature we draw one curve
+        grouped = df.groupby(['FEUV', 'Teq'])
+        for (flux, teq), group in grouped:
+            group = group.sort_values('m_planet_Earth')
+            style = line_styles.get(teq, '-')  # get the line style for this Teq
+            ax.plot(group['m_planet_Earth'], group['Mdot'],
+                    linestyle=style, marker='o',
+                    color=cmap(norm(flux)),
+                    label=f"Teq={teq:.0f}K, FEUV={flux:.1e}")
+        
+        ax.set_xscale('linear')
+        ax.set_yscale('log')
+        ax.set_xlabel("Planet Mass (Earth Masses)")
+        ax.set_ylabel("Mass Loss Rate (Mdot)")
+
+        # create and attach a colorbar for FEUV
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax) # pass the axis explicitly
+        cbar.set_label("FEUV (erg cm$^{-2}$ s$^{-1}$)")
+
+        # custom legend for the style lines, by Teq
+        custom_lines = [Line2D([], [], color='black', linestyle=line_styles[teq], lw=2) for teq in unique_Teq]
+        custom_labels = [f"T = {teq:.0f} K" for teq in unique_Teq]
+        ax.legend(custom_lines, custom_labels, loc='best', fontsize='small')
+
+        plt.tight_layout()
+        plt.show()
+
+
+    @staticmethod
+    def plot2(df):
+        """
+        Plot FEUV versus planet mass with:
+          - x-axis: Planet mass in Earth masses (log scale)
+          - y-axis: FEUV (log scale)
+          - Marker color determined by Mdot (with a colorbar)
+          - Lines connecting points of the same Teq group, with distinct line styles for each Teq
+          
+        Expected DataFrame columns:
+            'm_planet' : planetary mass (cgs)
+            'FEUV'     : flux (erg cm^-2 s^-1)
+            'Mdot'     : mass loss rate
+            'Teq'      : equilibrium temperature (K)
+        """
+        # Get conversion factors from ModelParams.
+        params = ModelParams()
+        mearth = params.mearth
+        df['m_planet_Earth'] = df['m_planet'] / mearth  # convert to Earth masses
+
+        # Define line styles for specific Teq values.
+        line_styles = {300: '-', 400: '--', 1000: '-.', 2000: ':'}
+        unique_Teq = np.sort(df['Teq'].unique())
+        for teq in unique_Teq:
+            if teq not in line_styles:
+                line_styles[teq] = '-'  # default line style
+
+        cmap = get_cmap("viridis")
+        norm = mcolors.LogNorm(vmin=df['Mdot'].min(), vmax=df['Mdot'].max())
+
+        fig, ax = plt.subplots(figsize=(10,8))
+
+        for teq, group in df.groupby("Teq"): # group the data by Teq so that each group is plotted with its own line style
+            group = group.sort_values("m_planet_Earth")
+            # plot the connecting line (using a fixed color, e.g. black, with a style to indicate Teq)
+            ax.plot(group["m_planet_Earth"], group["FEUV"], linestyle=line_styles[teq],
+                    color="black", alpha=0.5)
+            sc = ax.scatter(group["m_planet_Earth"], group["FEUV"], c=group["Mdot"], 
+                            cmap=cmap, norm=norm, edgecolor="k", s=50,
+                            label=f"Teq = {teq:.0f} K") # markers colored by Mdot
+        
+        ax.set_xscale("linear")
+        ax.set_yscale("log")
+        ax.set_xlabel("Planet Mass (Earth Masses)")
+        ax.set_ylabel("FEUV (erg cm$^{-2}$ s$^{-1}$)")
+
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax)
+        cbar.set_label("Mass Loss Rate (Mdot)")
+
+        # custom legend for the Teq line styles
+        custom_lines = [Line2D([], [], color="black", linestyle=line_styles[teq], lw=2) for teq in unique_Teq]
+        ax.legend(custom_lines, [f"T = {teq:.0f} K" for teq in unique_Teq],
+                  loc="best", fontsize="small")
+
+        plt.tight_layout()
+        plt.show()
+
+    
+    @staticmethod
+    def plot3(df):
+        """
+        Plot FEUV (x-axis) vs. Mdot (y-axis) where:
+          - Marker size is scaled by planet mass (converted to Earth masses),
+          - Marker color is given by equilibrium temperature (Teq) with a colorbar.
+        
+        Expected DataFrame columns:
+            'm_planet' : planetary mass (cgs)
+            'Mdot'     : mass loss rate
+            'FEUV'     : EUV flux (erg cm^-2 s^-1)
+            'Teq'      : equilibrium temperature (K)
+        """
+        params = ModelParams()
+        mearth = params.mearth
+
+        df['m_planet_Earth'] = df['m_planet'] / mearth
+        
+        scale_factor = 20
+        sizes = df['m_planet_Earth'] * scale_factor
+        
+        cmap = cm.viridis
+        norm = mcolors.Normalize(vmin=df['Teq'].min(), vmax=df['Teq'].max())
+        
+        fig, ax = plt.subplots(figsize=(10,8))
+        
+        # Plot scatter: x is FEUV, y is Mdot.
+        # Points are sized by planet mass and colored by Teq.
+        sc = ax.scatter(df['FEUV'], df['Mdot'], s=sizes, c=df['Teq'],
+                        cmap=cmap, norm=norm, edgecolor='k', alpha=0.8)
+        
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        
+        ax.set_xlabel("FEUV (erg cm$^{-2}$ s$^{-1}$)")
+        ax.set_ylabel("Mass Loss Rate (Mdot)")
+        
+        cbar = fig.colorbar(sc, ax=ax)
+        cbar.set_label("Equilibrium Temperature (K)")
+        
+        plt.tight_layout()
+        plt.show()
+
+
+    @staticmethod
+    def plot4(df):
+        """
+        Plot FEUV (x-axis) vs. Mdot (y-axis) where:
+          - Marker size is scaled by planet mass (converted to Earth masses),
+          - Marker color is given by equilibrium temperature (Teq) with a colorbar.
+        
+        Expected DataFrame columns:
+            'm_planet' : planetary mass (cgs)
+            'Mdot'     : mass loss rate
+            'FEUV'     : EUV flux (erg cm^-2 s^-1)
+            'Teq'      : equilibrium temperature (K)
+        """
+        params = ModelParams()
+        mearth = params.mearth
+
+        df['m_planet_Earth'] = df['m_planet'] / mearth
+
+        scale_factor = 20
+        sizes = df['m_planet_Earth'] * scale_factor
+        
+        cmap = cm.viridis
+        norm = mcolors.LogNorm(vmin=df['Mdot'].min(), vmax=df['Mdot'].max())
+        
+        fig, ax = plt.subplots(figsize=(10,8))
+        
+        # Plot scatter: x is FEUV, y is Teq.
+        # Points are sized by planet mass and colored by Mdot.
+        sc = ax.scatter(df['FEUV'], df['Teq'], s=sizes, c=df['Mdot'], cmap=cmap,
+                        norm=norm, edgecolor='k', alpha=0.8)
+
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        
+        ax.set_xlabel("FEUV (erg cm$^{-2}$ s$^{-1}$)")
+        ax.set_ylabel("Equlibrium temperature (K)")
+        
+        cbar = fig.colorbar(sc, ax=ax)
+        cbar.set_label("Mass Loss Rate (g/s)")
+        
+        plt.tight_layout()
         plt.show()
