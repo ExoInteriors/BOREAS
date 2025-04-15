@@ -79,8 +79,8 @@ class Fractionation:
         """
         Calculate the temperature T_outflow that corresponds to the REUV radius and the outflow region, with a specific sound speed cs.
         """
-        # mmw_outflow = self.params.mmw_H2O_outflow       # <----------- for dissociated H2O atmosphere
-        mmw_outflow = self.params.mmw_HHe_10H2O_outflow # <----------- for dissociated 90% HHe + 10% H2O atmosphere
+        mmw_outflow = self.params.mmw_H2O_outflow       # <----------- for dissociated H2O atmosphere
+        # mmw_outflow = self.params.mmw_HHe_10H2O_outflow # <----------- for dissociated 90% HHe + 10% H2O atmosphere
         m_H = self.params.m_H
         T_outflow = (cs**2 * m_H * mmw_outflow) / self.params.k_b # Kelvin
 
@@ -92,29 +92,29 @@ class Fractionation:
         Compute all necessary parameters for fractionation.
         """
         T_outflow = self.compute_T_outflow(cs)
-        b_i = 4.8e17 * T_outflow ** 0.75                    # cm^-1 s^-1
+        b_i = 4.8e17 * T_outflow ** 0.75                    # cm^-1 s^-1, diffusion coefficient for O in H from Zahnle & Kasting 1986
         mass_diff_O_H = self.params.m_O - self.params.m_H   # grams
         flux_total = Mdot / (4 * np.pi * REUV**2)           # g cm^-2 s^-1
 
         # ----- Pure H2O case (dissociated -> 2H + O) <------------
-        # N_H = 1                         # Hydrogen reservoir
-        # N_O = N_H / 2                   # For H2O, the reservoir of O is half of the reservoir of H
-        # reservoir_ratio = N_O / N_H     # needed ratio if we solve for φ_k in eq.2 Zahnle & Kasting 1986
+        N_H = 1                         # Hydrogen reservoir
+        N_O = N_H / 2                   # For H2O, the reservoir of O is half of the reservoir of H
+        reservoir_ratio = N_O / N_H     # needed ratio if we solve for φ_k in eq.2 Zahnle & Kasting 1986
 
         # ----- For 90% dissociated H/He and 10% dissociated H2O <------------
-        X_HHe = 0.9 # H/He mass fraction (dissociates to free H; max mmw_HHe_outflow = 1)
-        X_H2O = 0.1 # Water mass fraction (dissociates to 2H + O; max mmw_H2O_outflow = 6)
-        N_H_HHe = X_HHe / self.params.mmw_HHe_outflow       # eg 0.9 / 1 = 0.9.     free particle numbers (per unit mass). H/He contributes free hydrogen (ignore He)
-        N_total_H2O = X_H2O / self.params.mmw_H2O_outflow   # eg 0.1 / 6 = 0.01667. total number of free particles from water
-        # Water dissociates as: 2 H + 1 O, so partition the free particles:
-        N_H_H2O = (2/3) * N_total_H2O  # hydrogen from water, ≈ 0.01111
-        N_O_H2O = (1/3) * N_total_H2O  # oxygen from water, ≈ 0.00556
-        # Total free hydrogen in the outflow is from both components
-        N_H_total = N_H_HHe + N_H_H2O  # 0.9 + 0.01111 ≈ 0.91111
-        # The oxygen comes solely from water
-        N_O_total = N_O_H2O  # ≈ 0.00556
-        # And finally
-        reservoir_ratio = N_O_total / N_H_total  # ~0.00556 / 0.91111 ≈ 0.0061
+        # X_HHe = 0.9 # H/He mass fraction (dissociates to free H; max mmw_HHe_outflow = 1)
+        # X_H2O = 0.1 # Water mass fraction (dissociates to 2H + O; max mmw_H2O_outflow = 6)
+        # N_H_HHe = X_HHe / self.params.mmw_HHe_outflow       # eg 0.9 / 1 = 0.9.     free particle numbers (per unit mass). H/He contributes free hydrogen (ignore He)
+        # N_total_H2O = X_H2O / self.params.mmw_H2O_outflow   # eg 0.1 / 6 = 0.01667. total number of free particles from water
+        # # Water dissociates as: 2 H + 1 O, so partition the free particles:
+        # N_H_H2O = (2/3) * N_total_H2O  # hydrogen from water, ≈ 0.01111
+        # N_O_H2O = (1/3) * N_total_H2O  # oxygen from water, ≈ 0.00556
+        # # Total free hydrogen in the outflow is from both components
+        # N_H_total = N_H_HHe + N_H_H2O  # 0.9 + 0.01111 ≈ 0.91111
+        # # The oxygen comes solely from water
+        # N_O_total = N_O_H2O  # ≈ 0.00556
+        # # And finally
+        # reservoir_ratio = N_O_total / N_H_total  # ~0.00556 / 0.91111 ≈ 0.0061
     
         return b_i, mass_diff_O_H, flux_total, reservoir_ratio
 
@@ -221,8 +221,8 @@ class Fractionation:
                 print(f"Excluded: T_eq ({Teq:.2f} K) > T_outflow ({T_outflow:.2f} K) for planet mass={m_planet/params.mearth:.2f} M_earth.")
                 continue
             
-            # mmw_outflow = params.get_param('mmw_H2O_outflow')       # <----------- start with value from parameter file
-            mmw_outflow = params.get_param('mmw_HHe_10H2O_outflow') # <----------- start with value from parameter file
+            mmw_outflow = params.get_param('mmw_H2O_outflow')       # <----------- H2O, start with value from parameter file
+            # mmw_outflow = params.get_param('mmw_HHe_10H2O_outflow') # <----------- HHe & 10% H2O, start with value from parameter file
             prev_mmw_outflow = None # track for convergence
             
             for iteration in range(max_iter): # iterative loop to self-consistently update mmw_outflow
