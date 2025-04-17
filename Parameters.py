@@ -17,14 +17,14 @@ class ModelParams:
         self.mmw_HHe_10H2O  = 0.9 * self.mmw_HHe + 0.1 * self.mmw_H2O # Mean molecular weight (HHe & 10% water)
 
         # - Mean molecular weights for fully dissociated species assuming *strong* photoevaporation that fully dissociates the species
-        self.mmw_HHe_outflow = self.mmw_H                       # 1, ignores He, full dissociation gives free H atoms (mmw = 1 per H atom)
-        # # - To properly include Helium and not ignore it:
+        self.mmw_HHe_outflow = self.mmw_H                         # 1, ignores He, full dissociation gives free H atoms (mmw = 1 per H atom)
+        # # - To properly include Helium and not ignore it (but then we need 3 species escape):
         # X_H         = 0.70
         # X_He        = 0.30
         # mmw_H_free  = self.mmw_H                                # 1 for free hydrogen
         # mmw_He      = 4                                         # 4 for atomic helium
-        # N_H = X_H / mmw_H_free                                  # Number of free hydrogen atoms per unit mass
-        # N_He = X_He / mmw_He                                    # Number of free helium atoms per unit mass
+        # N_H         = X_H / mmw_H_free                          # Number of free hydrogen atoms per unit mass
+        # N_He        = X_He / mmw_He                             # Number of free helium atoms per unit mass
         # N_total_HHe = N_H + N_He
         # self.mmw_HHe_outflow = 1 / N_total_HHe                  # effective mean molecular weight including helium. ~1.29 given X_H=0.70 and X_He=0.30.
         

@@ -31,19 +31,3 @@ class Misc:
         R_b = (G * M_p) / (c_s ** 2)
 
         return R_b
-    
-    def get_flux_range(self, Teq):
-        """
-        Return a flux range (an array) for a given equilibrium temperature.
-        """
-        if np.isclose(Teq, 300):
-            return np.logspace(np.log10(0.3175), np.log10(1968.2999), 10)
-        elif np.isclose(Teq, 400):
-            return np.logspace(np.log10(1.004), np.log10(6220.7999), 10)
-        elif np.isclose(Teq, 1000):
-            return np.logspace(np.log10(39.2057), np.log10(242999.9999), 10)
-        elif np.isclose(Teq, 2000):
-            return np.logspace(np.log10(627.2926), np.log10(3887999.9999), 10)
-        else:
-            # Default range if no specific Teq match.
-            return np.logspace(np.log10(100), np.log10(10000), 10)
