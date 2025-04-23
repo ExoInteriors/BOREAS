@@ -38,8 +38,8 @@ class MassLoss:
         rho = (RS_flow / r)**2 * (cs / u)
         tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
         # rho_s = 1. / ((sigma_EUV / (mmw_HHe * m_H / 2.)) * tau)               # <----- H2/He in outflow
-        # rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
-        rho_s = 1. / ((sigma_EUV / (mmw_HHe_10H2O_outflow * m_H / 2.)) * tau) # <----- H2/He & 10% H2O outflow (dissociated)
+        rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
+        # rho_s = 1. / ((sigma_EUV / (mmw_HHe_10H2O_outflow * m_H / 2.)) * tau) # <----- H2/He & 10% H2O outflow (dissociated)
         rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
@@ -215,12 +215,12 @@ class MassLoss:
                 # rho_photo = g / (kappa_p_HHe * cs_eq**2)
 
                 ### for H2O
-                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O)) # <---- H2O in bolometrically heated region (non-dissociated)
-                # rho_photo = g / (kappa_p_H2O * cs_eq**2)
+                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O)) # <---- H2O in bolometrically heated region (non-dissociated)
+                rho_photo = g / (kappa_p_H2O * cs_eq**2)
 
                 ### for HHe and H2O
-                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_10H2O)) # <---- HHe and H2O in bolometrically heated region (non-dissociated)
-                rho_photo = g / (kappa_p_HHe_10H2O * cs_eq**2)
+                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_10H2O)) # <---- HHe and H2O in bolometrically heated region (non-dissociated)
+                # rho_photo = g / (kappa_p_HHe_10H2O * cs_eq**2)
 
                 result = {'m_planet': m_planet, 'r_planet': r_planet, 'Teq': teq}
 
