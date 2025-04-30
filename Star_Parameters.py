@@ -145,7 +145,7 @@ class StarParams():
 
         return FEUV_range
     
-    def update_Fbol_from_Teq(self):
+    def get_Fbol_from_Teq(self):
         """
         Computes bolometric luminosity received by a planet compatible with a given equilibrium temperature to update the associated 
         ModelParams object Fbol attribute. The equilibrium temperature is an attribute of the StarParams object that must be up to date
@@ -154,4 +154,5 @@ class StarParams():
         
         Fbol = 4 * self.params.epsilon * self.params.beta_planet * self.params.Stefan_SI * self.Teq**4 * 1E3 / (1 - self.params.albedo)
         
-        self.params.update_param('Fbol', Fbol)
+        # self.params.update_param('Fbol', Fbol)
+        return Fbol
