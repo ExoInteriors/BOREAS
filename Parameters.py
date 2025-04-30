@@ -14,7 +14,7 @@ class ModelParams:
         self.mmw_H          = 1                                 # Mean molecular weight (H)
         self.mmw_HHe        = 2.35                              # Mean molecular weight (HHe)
         self.mmw_H2O        = 2 * self.am_h + self.am_o         # Mean molecular weight (water)
-        self.mmw_HHe_10H2O  = 0.9 * self.mmw_HHe + 0.1 * self.mmw_H2O # Mean molecular weight (HHe & 10% water)
+        self.mmw_HHe_H2O    = 0.95 * self.mmw_HHe + 0.05 * self.mmw_H2O # Mean molecular weight (HHe & water)
 
         # - Mean molecular weights for fully dissociated species assuming *strong* photoevaporation that fully dissociates the species
         self.mmw_HHe_outflow = self.mmw_H                         # 1, ignores He, full dissociation gives free H atoms (mmw = 1 per H atom)
@@ -31,12 +31,12 @@ class ModelParams:
         self.mmw_H2O_outflow = (2 * self.am_h + self.am_o) / 3  # = (2+16) / 3 = 6, max mean molecular weight (H, H, and O) assuming full dissociation (H2O -> 2H + O)
         
         # - For mixture of HHe an H2O
-        X_HHe   = 0.9
-        X_H2O   = 0.1
+        X_HHe   = 0.5
+        X_H2O   = 0.5
         N_HHe   = X_HHe / self.mmw_HHe_outflow                  # = 0.9 / 1 = 0.9
         N_H2O   = X_H2O / self.mmw_H2O_outflow                  # = 0.1 / 6 ≈ 0.01667
         N_tot   = N_HHe + N_H2O                                 # total free particles per unit mass
-        self.mmw_HHe_10H2O_outflow = 1 / N_tot                  # ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
+        self.mmw_HHe_H2O_outflow = 1 / N_tot                  # ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
 
         self.k_b    = 1.380649e-16      # Boltzmann constant, erg K-1
         self.k_b_SI = 5.670374419e-8    # Boltzmann constant (SI) W m-2 K-1
@@ -48,7 +48,11 @@ class ModelParams:
         # --- Model-specific parameters
         self.kappa_p_HHe        = 1e-2  # opacity to outgoing thermal radiation, i.e. mean opacity in infrared 
         self.kappa_p_H2O        = 1     # ↳ roughly pump up the H one by 100
-        self.kappa_p_HHe_10H2O  = 0.11  # ↳ approximate this by 0.1*k_H2O + 0.9*k_H
+        self.kappa_p_HHe_H2O    = 0.11  # ↳ approximate this for 10% water
+        # self.kappa_p_HHe_H2O    = 0.2   # ↳ approximate this for 20% water
+        # self.kappa_p_HHe_H2O    = 0.5   # ↳ approximate this for 50% water
+        # self.kappa_p_HHe_H2O    = 0.7   # ↳ approximate this for 70% water
+        # self.kappa_p_HHe_H2O    = 0.9   # ↳ approximate this for 90% water
 
         self.E_photon   = 20 * 1.6e-12  # photon energy
         self.FEUV       = 450.          # received EUV flux, ergs cm-2 s-1

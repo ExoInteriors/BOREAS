@@ -7,6 +7,9 @@ class MassLoss:
         """
         Initialize the MassLoss class with model parameters.
         :param params: An instance of the ModelParams class or a similar object containing constants.
+
+        In this model, we differentiate between a pure H/He, pure H2O, and a mix of H/He-H2O mass loss in 2 different places. 
+        They are pointed out by arrows in comment form. Make sure to change each time.
         """
         self.params = params
 
@@ -19,7 +22,7 @@ class MassLoss:
         G, sigma_EUV, m_H = self.params.G, self.params.sigma_EUV, self.params.m_H
         mmw_HHe = self.params.mmw_HHe
         mmw_H2O_outflow = self.params.get_param('mmw_H2O_outflow') # always use the latest value
-        mmw_HHe_10H2O_outflow = self.params.get_param('mmw_HHe_10H2O_outflow') # always use the latest value
+        mmw_HHe_H2O_outflow = self.params.get_param('mmw_HHe_H2O_outflow') # always use the latest value
         RS_flow = G * m_planet / (2. * cs**2) # "hot" sonic point radius
 
         if RS_flow >= REUV:
@@ -38,8 +41,8 @@ class MassLoss:
         rho = (RS_flow / r)**2 * (cs / u)
         tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
         # rho_s = 1. / ((sigma_EUV / (mmw_HHe * m_H / 2.)) * tau)               # <----- H2/He in outflow
-        rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
-        # rho_s = 1. / ((sigma_EUV / (mmw_HHe_10H2O_outflow * m_H / 2.)) * tau) # <----- H2/He & 10% H2O outflow (dissociated)
+        # rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
+        rho_s = 1. / ((sigma_EUV / (mmw_HHe_H2O_outflow * m_H / 2.)) * tau) # <----- H2/He & H2O outflow (dissociated)
         rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
@@ -201,11 +204,11 @@ class MassLoss:
 
                 mmw_HHe = self.params.mmw_HHe
                 mmw_H2O = self.params.mmw_H2O
-                mmw_HHe_10H2O = self.params.mmw_HHe_10H2O
+                mmw_HHe_H2O = self.params.mmw_HHe_H2O
 
                 kappa_p_HHe = self.params.kappa_p_HHe
                 kappa_p_H2O = self.params.kappa_p_H2O
-                kappa_p_HHe_10H2O = self.params.kappa_p_HHe_10H2O
+                kappa_p_HHe_H2O = self.params.kappa_p_HHe_H2O
 
                 g = G * m_planet / r_planet**2
                 # Fbol = 4. * 5.6705e-5 * teq**4
@@ -215,12 +218,12 @@ class MassLoss:
                 # rho_photo = g / (kappa_p_HHe * cs_eq**2)
 
                 ### for H2O
-                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O)) # <---- H2O in bolometrically heated region (non-dissociated)
-                rho_photo = g / (kappa_p_H2O * cs_eq**2)
+                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O)) # <---- H2O in bolometrically heated region (non-dissociated)
+                # rho_photo = g / (kappa_p_H2O * cs_eq**2)
 
                 ### for HHe and H2O
-                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_10H2O)) # <---- HHe and H2O in bolometrically heated region (non-dissociated)
-                # rho_photo = g / (kappa_p_HHe_10H2O * cs_eq**2)
+                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_H2O)) # <---- HHe and H2O in bolometrically heated region (non-dissociated)
+                rho_photo = g / (kappa_p_HHe_H2O * cs_eq**2)
 
                 result = {'m_planet': m_planet, 'r_planet': r_planet, 'Teq': teq}
 
