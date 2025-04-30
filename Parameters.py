@@ -31,19 +31,18 @@ class ModelParams:
         self.mmw_H2O_outflow = (2 * self.am_h + self.am_o) / 3  # = (2+16) / 3 = 6, max mean molecular weight (H, H, and O) assuming full dissociation (H2O -> 2H + O)
         
         # - For mixture of HHe an H2O
-        X_HHe   = 0.5
-        X_H2O   = 0.5
-        N_HHe   = X_HHe / self.mmw_HHe_outflow                  # = 0.9 / 1 = 0.9
-        N_H2O   = X_H2O / self.mmw_H2O_outflow                  # = 0.1 / 6 ≈ 0.01667
-        N_tot   = N_HHe + N_H2O                                 # total free particles per unit mass
-        self.mmw_HHe_H2O_outflow = 1 / N_tot                  # ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
+        self.X_HHe   = 0.9
+        self.X_H2O   = 0.1
+        N_HHe   = self.X_HHe / self.mmw_HHe_outflow     # = 0.9 / 1 = 0.9
+        N_H2O   = self.X_H2O / self.mmw_H2O_outflow     # = 0.1 / 6 ≈ 0.01667
+        N_tot   = N_HHe + N_H2O                         # total free particles per unit mass
+        self.mmw_HHe_H2O_outflow = 1 / N_tot            # ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
 
         self.k_b    = 1.380649e-16      # Boltzmann constant, erg K-1
-        self.k_b_SI = 5.670374419e-8    # Boltzmann constant (SI) W m-2 K-1
+        self.Stefan_SI = 5.670374419e-8 # Stefan-Boltzmann constant (SI) W m-2 K-4
         self.G      = 6.67430e-8        # Gravitational constant, cm3 g-1 s-2
         self.rearth = 6.371e8           # Radius earth in cgs
         self.mearth = 5.97424e27        # Mass earth in cgs
-        self.k_b_SI = 5.67e-8           # Stefan-Boltzmann constant in W m-2 K-4
 
         # --- Model-specific parameters
         self.kappa_p_HHe        = 1e-2  # opacity to outgoing thermal radiation, i.e. mean opacity in infrared 
@@ -56,6 +55,7 @@ class ModelParams:
 
         self.E_photon   = 20 * 1.6e-12  # photon energy
         self.FEUV       = 450.          # received EUV flux, ergs cm-2 s-1
+        self.Fbol       = 450.          # received bolometric flux, ergs cm-2 s-1
         self.albedo     = 0.3           # albedo of planet
         self.beta_planet= 0.75          # fraction of the planet's surface that re-emits radiation
         self.epsilon    = 1.            # emissivity of planet

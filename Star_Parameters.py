@@ -78,11 +78,11 @@ class StarParams():
         t_sat = 1E-1 / star_mass
 
         if star_age < t_sat:
-            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.k_b_SI * saturation_ratio * Teq**4 * 1E3 / ((1 - self.params.albedo) * star_mass**0.5)
+            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.Stefan_SI * saturation_ratio * Teq**4 * 1E3 / ((1 - self.params.albedo) * star_mass**0.5)
         else:
-            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.k_b_SI * saturation_ratio * (star_age/ t_sat)**alpha * Teq**4 * 1E3 / ((1 - self.params.albedo) * star_mass**0.5)
+            FEUV = 4 * self.params.beta_planet * self.params.epsilon * self.params.Stefan_SI * saturation_ratio * (star_age/ t_sat)**alpha * Teq**4 * 1E3 / ((1 - self.params.albedo) * star_mass**0.5)
 
-        self.params.FEUV = FEUV
+        self.params.update_param('FEUV', FEUV)
 
     def update_param(self, param_name, value):
         """Dynamically update a parameter value."""
@@ -96,7 +96,7 @@ class StarParams():
         return getattr(self, param_name, None)
     
     def get_FEUV_range_from_age(self, star_age=None):
-        '''
+        """
         /!\ This method can be used in 2 ways: either a star_age value is provided when the method is called or the value of
         the star_age attribute of the StarParams object will be used.
 
@@ -104,7 +104,7 @@ class StarParams():
         
         Return:
         FEUV_range: numpy array, range of XUV flux for the given star age and equilibrium temperature (in erg/s/cm2)
-        '''
+        """
 
         if star_age is None:
             star_age = self.star_age
@@ -123,12 +123,12 @@ class StarParams():
         return FEUV_range
     
     def get_FEUV_range_any_age(self):
-        '''
+        """
         Computes the range of XUV flux possible for a given star age and planet equilibrium temperature with the star mass  and age being free parameters. Uses Rogers et al 2021 and Baraffe et al. 2015.
 
         Return:
         FEUV_range: numpy array, range of XUV flux for this equilibrium temperature (in erg/s/cm2)
-        '''
+        """
         
         star_age_ar = np.linspace(0.001, 13.4, 1000) # the maximum age explored here is the age of the oldest Milky Way stars
         F_EUV_max_inter = np.empty_like(star_age_ar)
@@ -144,3 +144,14 @@ class StarParams():
         FEUV_range = np.logspace(np.log10(F_EUV_min), np.log10(F_EUV_max), 10)
 
         return FEUV_range
+    
+    def update_Fbol_from_Teq(self):
+        """
+        Computes bolometric luminosity received by a planet compatible with a given equilibrium temperature to update the associated 
+        ModelParams object Fbol attribute. The equilibrium temperature is an attribute of the StarParams object that must be up to date
+        before calling this method.
+        """
+        
+        Fbol = 4 * self.params.epsilon * self.params.beta_planet * self.params.Stefan_SI * self.Teq**4 * 1E3 / (1 - self.params.albedo)
+        
+        self.params.update_param('Fbol', Fbol)
