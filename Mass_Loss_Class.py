@@ -42,7 +42,7 @@ class MassLoss:
         tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
         # rho_s = 1. / ((sigma_EUV / (mmw_HHe * m_H / 2.)) * tau)               # <----- H2/He in outflow
         # rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
-        rho_s = 1. / ((sigma_EUV / (mmw_HHe_H2O_outflow * m_H / 2.)) * tau) # <----- H2/He & H2O outflow (dissociated)
+        rho_s = 1. / ((sigma_EUV / (mmw_HHe_H2O_outflow * m_H / 2.)) * tau)   # <----- H2/He & H2O outflow (dissociated)
         rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
@@ -186,7 +186,7 @@ class MassLoss:
 
     ### Combine everything and run mass loss model ###
 
-    def compute_mass_loss_parameters(self, m_planet, r_planet, teq):
+    def compute_mass_loss_parameters(self, m_planet, r_planet, teq, include_outflow=False):
         """
         Compute REUV, Mdot, cs, and classify regimes for mass loss.
         """
@@ -211,7 +211,6 @@ class MassLoss:
                 kappa_p_HHe_H2O = self.params.kappa_p_HHe_H2O
 
                 g = G * m_planet / r_planet**2
-                # Fbol = 4. * 5.6705e-5 * teq**4
 
                 ### for H
                 # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe)) # <---- HHe in bolometrically heated region (non-dissociated)
@@ -245,6 +244,16 @@ class MassLoss:
                     'regime': 'EL',
                 })
 
+                # Optionally compute outflow T & P
+                if include_outflow:
+                    mmw_outflow = self.params.mmw_HHe  # <---- for pure H/He outflow
+                    T_outflow = (cs_use**2 * m_H * mmw_outflow) / k_b
+                    P_EUV = rho_EUV_EL * k_b * T_outflow / (m_H * mmw_outflow)
+                    result.update({
+                        'T_outflow': T_outflow,
+                        'P_EUV': P_EUV
+                    })
+
                 # Recombination-limited (RL) regime check
                 if time_scale_ratio < 1:
                     REUV_solution_RL, rho_EUV_RL, rho_flow_RL = self.find_REUV_solution_RL(r_planet, m_planet, rho_photo, cs_eq, FEUV_photon)
@@ -267,6 +276,16 @@ class MassLoss:
                         'rho_flow': rho_flow_RL,
                         'regime': 'RL',
                     })
+
+                    # Optionally compute outflow T & P
+                    if include_outflow:
+                        mmw_outflow = self.params.mmw_HHe  # <---- for pure H/He outflow
+                        T_outflow = (cs_use**2 * m_H * mmw_outflow) / k_b
+                        P_EUV = rho_EUV_RL * k_b * T_outflow / (m_H * mmw_outflow)
+                        result.update({
+                            'T_outflow': T_outflow,
+                            'P_EUV': P_EUV
+                        })
 
                 if result['RS_flow'] >= result['REUV']:
                     mass_loss_results.append(result)
