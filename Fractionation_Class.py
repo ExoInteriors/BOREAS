@@ -59,10 +59,10 @@ class Fractionation:
         self.params = params
         self.physics = FractionationPhysics(params)
 
-
     def compute_T_outflow(self, cs):
         """
         Calculate the temperature T_outflow that corresponds to the REUV radius and the outflow region, with a specific sound speed cs.
+        Assumes ideal gas law.
         """
         # mmw_outflow = self.params.mmw_H2O_outflow       # <----------- for dissociated H2O atmosphere
         mmw_outflow = self.params.mmw_HHe_H2O_outflow   # <----------- for dissociated HHe + H2O atmosphere
@@ -70,7 +70,6 @@ class Fractionation:
         T_outflow = (cs**2 * m_H * mmw_outflow) / self.params.k_b # Kelvin
 
         return T_outflow
-    
     
     def compute_fractionation_params(self, cs, REUV, Mdot):
         """
@@ -102,7 +101,6 @@ class Fractionation:
         reservoir_ratio = N_O_total / N_H_total             # e.g. ~0.00556 / 0.91111 ≈ 0.0061
     
         return b_i, mass_diff_O_H, flux_total, reservoir_ratio
-
 
     def iterative_fractionation(self, flux_total, REUV, m_planet, T_outflow, b_i, mass_diff_O_H, reservoir_ratio, method="H_O_zahnle1986", tol=1e-30, max_iter=1000):
         """
@@ -143,7 +141,6 @@ class Fractionation:
 
         print("Maximum iterations reached without convergence of phi_O + phi_H.")
         return None, None, None
-    
 
     def execute_fractionation(self, mass_loss_results, misc):
         if params is None:
@@ -186,7 +183,6 @@ class Fractionation:
             })
 
         return mass_loss_results
-
 
     def execute_self_consistent_fractionation(self, mass_loss_results, mass_loss, misc, params, tol=1e-5, max_iter=1000):
         """
@@ -257,6 +253,7 @@ class Fractionation:
                 'mmw_outflow': mmw_outflow, # final mmw_outflow
                 'Mdot': Mdot, # final mass loss rate
                 'cs': cs # final sound speed
+                # updated RXUV
             })
 
         return mass_loss_results

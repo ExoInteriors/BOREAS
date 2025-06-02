@@ -5,9 +5,6 @@ from Flow_Solutions_Class import FlowSolutions as FS
 class MassLoss:
     def __init__(self, params):
         """
-        Initialize the MassLoss class with model parameters.
-        :param params: An instance of the ModelParams class or a similar object containing constants.
-
         In this model, we differentiate between a pure H/He, pure H2O, and a mix of H/He-H2O mass loss in 2 different places. 
         They are pointed out by arrows in comment form. Make sure to change each time.
         """
@@ -134,7 +131,7 @@ class MassLoss:
 
     def compare_densities_RL(self, REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon):
         """
-        Momentum balance for the radiation-limited (RL) case.
+        Momentum balance for the recombination-limited (RL) case.
         """
         G, m_H, alpha_rec = self.params.G, self.params.m_H, self.params.alpha_rec
 
@@ -159,7 +156,7 @@ class MassLoss:
 
     def find_REUV_solution_RL(self, r_planet, m_planet, rho_photo, cs_eq, FEUV_photon):
         """
-        REUV solution for the radiation-limited (RL) case.
+        REUV solution for the recombination-limited (RL) case.
         """
         REUV_lower_bound = r_planet * 1.001
         REUV_upper_bound = r_planet * 5
