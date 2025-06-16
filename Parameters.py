@@ -30,8 +30,8 @@ class ModelParams:
         self.mmw_H2O_outflow = (2 * self.am_h + self.am_o) / 3    # = (2+16) / 3 = 6, max mean molecular weight (H, H, and O) assuming full dissociation (H2O -> 2H + O)
         
         # - For mixture of HHe an H2O (outflow region)
-        self.X_HHe  = 0.9                               # HHe mass fraction
         self.X_H2O  = 0.1                               # H2O mass fraction
+        self.X_HHe  = 1 - self.X_H2O                    # HHe mass fraction
         N_HHe       = self.X_HHe / self.mmw_HHe_outflow # e.g. = 0.9 / 1 = 0.9
         N_H2O       = self.X_H2O / self.mmw_H2O_outflow # e.g. = 0.1 / 6 ≈ 0.01667
         N_tot       = N_HHe + N_H2O                     # total free particles per unit mass
