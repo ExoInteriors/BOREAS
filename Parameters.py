@@ -22,24 +22,25 @@ class ModelParams:
         self.m_O            = self.am_o * self.m_H              # Μass of oxygen atom, grams
         self.m_CO2          = 44 * self.m_H                     # Mass of CO2 molecule, grams
 
-        # - Mean molecular weights for non-dissociated species
         self.mmw_H          = 1                                 # Mean molecular weight (H)
         self.mmw_HHe        = 2.35                              # Mean molecular weight (HHe)
-        self.mmw_H2O        = 2 * self.am_h + self.am_o         # Mean molecular weight (water)
-        self.mmw_HHe_H2O    = 0.95 * self.mmw_HHe + 0.05 * self.mmw_H2O # Mean molecular weight (HHe & water)
 
-        # - Mean molecular weights for fully dissociated species assuming *strong* photoevaporation that fully dissociates the species
+        # - For fully dissociated species assuming *strong* photoevaporation that fully dissociates them (outflow region)
         self.mmw_HHe_outflow = self.mmw_H                         # 1, ignores He, full dissociation gives free H atoms (mmw = 1 per H atom)
         self.mmw_H2O_outflow = (2 * self.am_h + self.am_o) / 3    # = (2+16) / 3 = 6, max mean molecular weight (H, H, and O) assuming full dissociation (H2O -> 2H + O)
         
-        # - For mixture of HHe an H2O
-        self.X_HHe  = 0.8                               # HHe mass fraction
-        self.X_H2O  = 0.2                               # H2O mass fraction
+        # - For mixture of HHe an H2O (outflow region)
+        self.X_HHe  = 0.9                               # HHe mass fraction
+        self.X_H2O  = 0.1                               # H2O mass fraction
         N_HHe       = self.X_HHe / self.mmw_HHe_outflow # e.g. = 0.9 / 1 = 0.9
         N_H2O       = self.X_H2O / self.mmw_H2O_outflow # e.g. = 0.1 / 6 ≈ 0.01667
         N_tot       = N_HHe + N_H2O                     # total free particles per unit mass
         self.mmw_HHe_H2O_outflow = 1 / N_tot            # e.g. ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
-
+        
+        # - Mean molecular weights for non-dissociated species (bolometrically heated region)
+        self.mmw_H2O        = 2 * self.am_h + self.am_o         # Mean molecular weight (water)
+        self.mmw_HHe_H2O    = self.X_HHe * self.mmw_HHe + self.X_H2O * self.mmw_H2O # Mean molecular weight (HHe & water)
+        
         self.k_b    = 1.380649e-16      # Boltzmann constant, erg K-1
         self.Stefan_SI  = 5.670374419e-8 # Stefan-Boltzmann constant (SI) W m-2 K-4
         self.Stefan_cgs = 5.670374419e-5 # Stefan-Boltzmann constant (cgs) erg cm-2 s-1 K-4
