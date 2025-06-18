@@ -147,6 +147,14 @@ class Fractionation:
         Iteratively update mmw_outflow until convergence.
         """
         for result in mass_loss_results:
+            initial_mmw_H2O = (2 * self.params.am_h + self.params.am_o) / 3     # <----------- H2O
+            params.update_param('mmw_H2O_outflow', initial_mmw_H2O)
+            mmw_outflow = initial_mmw_H2O
+
+            # initial_mmw_HHe_H2O = 1 / self.params.N_tot                         # <----------- HHe & H2O
+            # params.update_param('mmw_HHe_H2O_outflow', initial_mmw_HHe_H2O)
+            # mmw_outflow = params.get_param('mmw_HHe_H2O_outflow')
+            
             m_planet = result['m_planet']
             Teq = result['Teq']
             REUV = result['REUV']
@@ -158,15 +166,12 @@ class Fractionation:
                 print(f"Excluded: T_eq ({Teq:.2f} K) > T_outflow ({T_outflow:.2f} K) for planet mass={m_planet/params.mearth:.2f} M_earth.")
                 continue
             
-            mmw_outflow = params.get_param('mmw_H2O_outflow')       # <----------- H2O, start with value from parameter file
-            # mmw_outflow = params.get_param('mmw_HHe_H2O_outflow')   # <----------- HHe & H2O, start with value from parameter file
-            prev_mmw_outflow = None # track for convergence
+            prev_mmw = None
             
             for iteration in range(max_iter): # iterative loop to self-consistently update mmw_outflow
                 # ---------- T, P at R_EUV, and/or Bondi radius ----------
                 T_outflow = self.compute_T_outflow(cs)
                 P_EUV = misc.calculate_pressure_ideal_gas(result['rho_EUV'], T_outflow)
-                # R_b = misc.
                 
                 # ---------- Fractionation model ----------
                 b_i, mass_diff, flux_total, reservoir_ratio = self.compute_fractionation_params(cs, REUV, Mdot)
@@ -178,26 +183,32 @@ class Fractionation:
 
                 # ---------- Make it self consistent ----------
                 # **Update mmw_outflow using O/H ratio**
-                mmw_outflow = (phi_H * params.am_h + phi_O * params.am_o) / (phi_H + phi_O)
-                
-                # **Check Convergence**
-                if prev_mmw_outflow is not None and abs(mmw_outflow - prev_mmw_outflow) / prev_mmw_outflow < tol:
+                new_mmw = (phi_H * params.am_h + phi_O * params.am_o) / (phi_H + phi_O)
+
+                # **Check Convergence on mmw**
+                if prev_mmw is not None and abs(new_mmw - prev_mmw) / prev_mmw < tol:
                     print(f"Converged in {iteration+1} iterations for planet {m_planet/params.mearth:.1f} M_earth.")
-                    print(f"Final mmw_outflow = {mmw_outflow:.1f}")
+                    print(f"Final mmw_outflow = {new_mmw:.1f}")
+                    mmw_outflow = new_mmw
                     break  # stop iterating if mmw_outflow has converged
 
-                prev_mmw_outflow = mmw_outflow  # store for next iteration
+                # otherwise prepare for next pass
+                prev_mmw = new_mmw
+                mmw_outflow = new_mmw
+                params.update_param('mmw_H2O_outflow', mmw_outflow)             # <----------- H2O
+                # params.update_param('mmw_HHe_H2O_outflow', mmw_outflow)         # <----------- HHe & H2O
 
-                 # **Update mmw_outflow in params**
-                params.update_param('mmw_H2O_outflow', mmw_outflow)         # <----------- H2O
-                # params.update_param('mmw_HHe_H2O_outflow', mmw_outflow)     # <----------- HHe & H2O
-                
-                # **Recompute Mdot with updated mmw_outflow, and cs until Mdot matches Mdot_EL**
+                # update Mdot & cs for the next fractionation iteration
                 Mdot = mass_loss.compute_mdot_only(cs, REUV, m_planet)
-                cs = mass_loss.compute_sound_speed(REUV, m_planet)
+                cs   = mass_loss.compute_sound_speed(REUV, m_planet)
 
-            if phi_O is None or phi_H is None:
-                continue
+            # -------- ONE final recompute with the converged mmw_outflow --------
+            params.update_param('mmw_H2O_outflow', mmw_outflow)                  # <----------- H2O
+            # params.update_param('mmw_HHe_H2O_outflow', mmw_outflow)              # <----------- HHe & H2O
+            Mdot        = mass_loss.compute_mdot_only(cs, REUV, m_planet)
+            cs          = mass_loss.compute_sound_speed(REUV, m_planet)
+            T_outflow   = self.compute_T_outflow(cs)
+            P_EUV       = misc.calculate_pressure_ideal_gas(result['rho_EUV'], T_outflow)
 
             print(f"Planet with mass={m_planet/params.mearth:.2f} M_earth results: Mdot = {Mdot}")
             print(f"Planet with mass={m_planet/params.mearth:.2f} M_earth results: phi_O = {phi_O}, phi_H = {phi_H}, x_O = {x_O}\n")

@@ -34,8 +34,8 @@ class ModelParams:
         self.X_HHe  = 1 - self.X_H2O                    # HHe mass fraction
         N_HHe       = self.X_HHe / self.mmw_HHe_outflow # e.g. = 0.9 / 1 = 0.9
         N_H2O       = self.X_H2O / self.mmw_H2O_outflow # e.g. = 0.1 / 6 ≈ 0.01667
-        N_tot       = N_HHe + N_H2O                     # total free particles per unit mass
-        self.mmw_HHe_H2O_outflow = 1 / N_tot            # e.g. ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
+        self.N_tot  = N_HHe + N_H2O                # total free particles per unit mass
+        self.mmw_HHe_H2O_outflow = 1 / self.N_tot            # e.g. ≈ 1.09, max mean molecular weight (90% of H, H, 10% of H, H, and O) assuming full dissociation of H2 and water
         
         # - Mean molecular weights for non-dissociated species (bolometrically heated region)
         self.mmw_H2O        = 2 * self.am_h + self.am_o         # Mean molecular weight (water)
