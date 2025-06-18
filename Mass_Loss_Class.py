@@ -18,9 +18,9 @@ class MassLoss:
         """
         G, sigma_EUV, m_H = self.params.G, self.params.sigma_EUV, self.params.m_H
         mmw_HHe = self.params.mmw_HHe
-        mmw_H2O_outflow = self.params.get_param('mmw_H2O_outflow') # always use the latest value
-        mmw_HHe_H2O_outflow = self.params.get_param('mmw_HHe_H2O_outflow') # always use the latest value
-        RS_flow = G * m_planet / (2. * cs**2) # "hot" sonic point radius
+        mmw_H2O_outflow = self.params.get_param('mmw_H2O_outflow')          # always use the latest value
+        mmw_HHe_H2O_outflow = self.params.get_param('mmw_HHe_H2O_outflow')  # always use the latest value
+        RS_flow = G * m_planet / (2. * cs**2)                               # "hot" sonic point radius
 
         if RS_flow >= REUV:
             r = np.logspace(np.log10(REUV), np.log10(max(5 * RS_flow, 5 * REUV)), 250)
@@ -37,9 +37,9 @@ class MassLoss:
 
         rho = (RS_flow / r)**2 * (cs / u)
         tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
-        # rho_s = 1. / ((sigma_EUV / (mmw_HHe * m_H / 2.)) * tau)               # <----- H2/He in outflow
-        # rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
-        rho_s = 1. / ((sigma_EUV / (mmw_HHe_H2O_outflow * m_H / 2.)) * tau)   # <----- H2/He & H2O outflow (dissociated)
+        # rho_s = 1. / ((sigma_EUV / (mmw_HHe * m_H / 2.)) * tau)               # <----- H/He in outflow
+        rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
+        # rho_s = 1. / ((sigma_EUV / (mmw_HHe_H2O_outflow * m_H / 2.)) * tau)   # <----- H2/He & H2O outflow (dissociated)
         rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
@@ -137,7 +137,7 @@ class MassLoss:
 
         rho_EUV = rho_photo * np.exp((G * m_planet / cs_eq**2) * (1. / REUV - 1. / r_planet))
 
-        cs_RL = 1.2e6  # Sound speed for T ~ 10^4 K
+        cs_RL = 1.2e6 # Sound speed for T ~ 10^4 K
         Hflow = min(REUV / 3, cs_RL**2 * REUV**2 / (2 * G * m_planet))
         nb = np.sqrt(FEUV_photon / (alpha_rec * Hflow))
 
@@ -183,7 +183,7 @@ class MassLoss:
 
     ### Combine everything and run mass loss model ###
 
-    def compute_mass_loss_parameters(self, m_planet, r_planet, teq, include_outflow=False):
+    def compute_mass_loss_parameters(self, m_planet, r_planet, teq, pureHHe=False):
         """
         Compute REUV, Mdot, cs, and classify regimes for mass loss.
         """
@@ -209,17 +209,17 @@ class MassLoss:
 
                 g = G * m_planet / r_planet**2
 
-                ### for H
-                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe)) # <---- HHe in bolometrically heated region (non-dissociated)
+                ### for H/He
+                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe))      # <---- HHe in bolometrically heated region (non-dissociated)
                 # rho_photo = g / (kappa_p_HHe * cs_eq**2)
 
                 ### for H2O
-                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O)) # <---- H2O in bolometrically heated region (non-dissociated)
-                # rho_photo = g / (kappa_p_H2O * cs_eq**2)
+                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O))      # <---- H2O in bolometrically heated region (non-dissociated)
+                rho_photo = g / (kappa_p_H2O * cs_eq**2)
 
                 ### for HHe and H2O
-                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_H2O)) # <---- HHe and H2O in bolometrically heated region (non-dissociated)
-                rho_photo = g / (kappa_p_HHe_H2O * cs_eq**2)
+                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_H2O))  # <---- HHe and H2O in bolometrically heated region (non-dissociated)
+                # rho_photo = g / (kappa_p_HHe_H2O * cs_eq**2)
 
                 result = {'m_planet': m_planet, 'r_planet': r_planet, 'Teq': teq}
 
@@ -242,8 +242,8 @@ class MassLoss:
                 })
 
                 # Optionally compute outflow T & P
-                if include_outflow:
-                    mmw_outflow = self.params.mmw_HHe  # <---- for pure H/He outflow
+                if pureHHe:
+                    mmw_outflow = self.params.mmw_HHe # <---- for pure H/He outflow
                     T_outflow = (cs_use**2 * m_H * mmw_outflow) / k_b
                     P_EUV = rho_EUV_EL * k_b * T_outflow / (m_H * mmw_outflow)
                     result.update({
@@ -275,8 +275,8 @@ class MassLoss:
                     })
 
                     # Optionally compute outflow T & P
-                    if include_outflow:
-                        mmw_outflow = self.params.mmw_HHe  # <---- for pure H/He outflow
+                    if pureHHe:
+                        mmw_outflow = self.params.mmw_HHe # <---- for pure H/He outflow
                         T_outflow = (cs_use**2 * m_H * mmw_outflow) / k_b
                         P_EUV = rho_EUV_RL * k_b * T_outflow / (m_H * mmw_outflow)
                         result.update({
