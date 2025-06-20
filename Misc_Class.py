@@ -21,13 +21,3 @@ class Misc:
         P_REUV = rho_EUV * k_b * T_REUV / (mmw_H * m_H) # ideal gas law
 
         return P_REUV
-    
-    def calculate_R_b(self, M_p, c_s):
-        """
-        Calculate the Bondi radius, where thermal energy and gravitational energy are comparable.
-        """
-        G = self.params.G
-
-        R_b = (G * M_p) / (c_s ** 2)
-
-        return R_b
