@@ -5,8 +5,7 @@ from Flow_Solutions_Class import FlowSolutions as FS
 class MassLoss:
     def __init__(self, params):
         """
-        In this model, we differentiate between a pure H/He, pure H2O, and a mix of H/He-H2O mass loss in 2 different places. 
-        They are pointed out by arrows in comment form. Make sure to change each time.
+        Differentiates between pure H/He, pure H2O, and mixed H/He-H2O outflows via a mode flag.
         """
         self.params = params
 
@@ -14,44 +13,50 @@ class MassLoss:
         
     def compute_mdot_only(self, cs, REUV, m_planet):
         """
-        Direct computation of the mass-loss rate (Mdot).
+        Compute the instantaneous mass-loss rate for a given sound speed.
         """
-        G, sigma_EUV, m_H = self.params.G, self.params.sigma_EUV, self.params.m_H
-        mmw_HHe = self.params.mmw_HHe
-        mmw_H2O_outflow = self.params.get_param('mmw_H2O_outflow')          # always use the latest value
-        mmw_HHe_H2O_outflow = self.params.get_param('mmw_HHe_H2O_outflow')  # always use the latest value
-        RS_flow = G * m_planet / (2. * cs**2)                               # "hot" sonic point radius
+        G, sigma, m_H = self.params.G, self.params.sigma_EUV, self.params.m_H
+
+        # Select outflow molecular weight based on mode
+        mode = self.params.outflow_mode
+        if mode == 'HHe':
+            mmw = self.params.mmw_HHe_outflow
+        elif mode == 'H2O':
+            mmw = self.params.mmw_H2O_outflow
+        elif mode == 'HHe_H2O':
+            mmw = self.params.mmw_HHe_H2O_outflow
+        else:
+            raise ValueError(f"Unknown outflow_mode '{mode}'")
+
+        RS_flow = G * m_planet / (2. * cs**2) # "hot" sonic point radius
+
+        # integrate Parker wind from REUV outward
+        r_max = max(5 * RS_flow, 5 * REUV)
+        r = np.logspace(np.log10(REUV), np.log10(r_max), 250)
 
         if RS_flow >= REUV:
-            r = np.logspace(np.log10(REUV), np.log10(max(5 * RS_flow, 5 * REUV)), 250)
             u = FS.get_parker_wind(r, cs, RS_flow)
-    
-        # this else statement does not mean core-powered mass loss.
-        # this RS_flow is the "hot" one. It can live in the bolometrically heated region
-        # and still lead to a photoevaporative mass loss, as long as the "cold" sonic point
-        # is outside the REUV.
-        else:
-            r = np.logspace(np.log10(REUV), np.log10(max(5 * RS_flow, 5 * REUV)), 250)
+        else: 
+            # does not mean CP mass loss. this RS_flow is the "hot" one. It can live in the bolometrically heated region
+            # and still lead to a photoevaporative mass loss, as long as the "cold" sonic point is outside the REUV.
             constant = (1. - 4. * np.log(REUV / RS_flow) - 4. * (RS_flow / REUV) - 1e-13)
             u = FS.get_parker_wind_const(r, cs, RS_flow, constant)
 
         rho = (RS_flow / r)**2 * (cs / u)
         tau = np.fabs(np.trapz(rho[::-1], r[::-1]))
-        # rho_s = 1. / ((sigma_EUV / (mmw_HHe * m_H / 2.)) * tau)               # <----- H/He in outflow
-        rho_s = 1. / ((sigma_EUV / (mmw_H2O_outflow * m_H / 2.)) * tau)       # <----- H2O in outflow (dissociated)
-        # rho_s = 1. / ((sigma_EUV / (mmw_HHe_H2O_outflow * m_H / 2.)) * tau)   # <----- H2/He & H2O outflow (dissociated)
+        # base density at REUV from EUV absorption
+        rho_s = 1.0 / ((sigma / (mmw * m_H/2.)) * tau)
         rho *= rho_s
 
         Mdot = 4 * np.pi * REUV**2 * rho[0] * u[0]
-
         return Mdot
 
     def compute_sound_speed(self, REUV, m_planet):
         """
-        Calculate the energy-limited mass loss rate and corresponding sound speed.
+        Solve for c_s such that computed Mdot matches the energy-limited rate.
         """
-        G, FEUV, eff = self.params.G, self.params.get_param('FEUV'), self.params.eff
-        Mdot_EL = eff * np.pi * REUV**3 / (4 * G * m_planet) * FEUV
+        G, FEUV, eta = self.params.G, self.params.get_param('FEUV'), self.params.eff
+        Mdot_EL = eta * np.pi * REUV**3 / (4 * G * m_planet) * FEUV
 
         lower_bound_initial, upper_bound = 2e5, 1e13
 
@@ -68,13 +73,12 @@ class MassLoss:
                 f1 = mdot_difference(lower_bound_initial)
             return brentq(mdot_difference, lower_bound_initial, upper_bound / 10)
 
-    ### Momentum balance for EL and RL regimes ###
-        
+    ### Regime-specific density comparisons ###
     def compare_densities_EL(self, REUV, rho_photo, r_planet, m_planet, cs_eq, FEUV_photon):
         """
         Momentum balance for the energy-limited (EL) case.
         """
-        G, alpha_rec = self.params.G, self.params.alpha_rec
+        G, alpha = self.params.G, self.params.alpha_rec
 
         rho_EUV = rho_photo * np.exp((G * m_planet / cs_eq**2) * (1. / REUV - 1. / r_planet))
         cs_use = self.compute_sound_speed(REUV, m_planet)
@@ -91,7 +95,7 @@ class MassLoss:
             Hflow = REUV
 
         time_scale_flow = Hflow / u_launch
-        time_scale_recom = np.sqrt(Hflow / (FEUV_photon * alpha_rec))
+        time_scale_recom = np.sqrt(Hflow / (FEUV_photon * alpha))
         time_scale_ratio = time_scale_recom / time_scale_flow
         if cs_use < 1.2e6:
             time_scale_ratio = 10.
@@ -183,117 +187,62 @@ class MassLoss:
 
     ### Combine everything and run mass loss model ###
 
-    def compute_mass_loss_parameters(self, m_planet, r_planet, teq, pureHHe=False):
+    def compute_mass_loss_parameters(self, m_p, r_planet, teq):
         """
-        Compute REUV, Mdot, cs, and classify regimes for mass loss.
+        Solve for REUV, c_s, and Mdot in EL or RL, using mode flag for base molecular weight.
         """
-        mass_loss_results = []
-        for m_planet, r_planet, teq in zip(m_planet, r_planet, teq):
-            try:
-                FEUV = self.params.get_param('FEUV')
-                E_photon = self.params.E_photon
-                FEUV_photon = FEUV / E_photon
-                alpha_rec = self.params.alpha_rec
-                G = self.params.G
-                k_b = self.params.k_b
-
-                m_H = self.params.m_H
-
-                mmw_HHe = self.params.mmw_HHe
-                mmw_H2O = self.params.mmw_H2O
-                mmw_HHe_H2O = self.params.mmw_HHe_H2O
-
-                kappa_p_HHe = self.params.kappa_p_HHe
-                kappa_p_H2O = self.params.kappa_p_H2O
-                kappa_p_HHe_H2O = self.params.kappa_p_HHe_H2O
-
-                g = G * m_planet / r_planet**2
-
-                ### for H/He
-                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe))      # <---- HHe in bolometrically heated region (non-dissociated)
-                # rho_photo = g / (kappa_p_HHe * cs_eq**2)
-
-                ### for H2O
-                cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_H2O))      # <---- H2O in bolometrically heated region (non-dissociated)
-                rho_photo = g / (kappa_p_H2O * cs_eq**2)
-
-                ### for HHe and H2O
-                # cs_eq = np.sqrt((k_b * teq) / (m_H * mmw_HHe_H2O))  # <---- HHe and H2O in bolometrically heated region (non-dissociated)
-                # rho_photo = g / (kappa_p_HHe_H2O * cs_eq**2)
-
-                result = {'m_planet': m_planet, 'r_planet': r_planet, 'Teq': teq}
-
-                # Energy-limited (EL) regime calculations
-                REUV_solution_EL, time_scale_ratio, rho_EUV_EL, rho_flow_EL = self.find_REUV_solution_EL(r_planet, m_planet, rho_photo, cs_eq, FEUV_photon)
-                cs_use = self.compute_sound_speed(REUV_solution_EL, m_planet)
-                cs_use = min(cs_use, 1.2e6)
-                Mdot_EL = self.compute_mdot_only(cs_use, REUV_solution_EL, m_planet)
-                RS_flow = G * m_planet / (2. * cs_use**2)
-
-                result.update({
-                    'REUV': REUV_solution_EL,
-                    'cs': cs_use,
-                    'Mdot': Mdot_EL,
-                    'RS_flow': RS_flow,
-                    'rho_EUV': rho_EUV_EL,
-                    'rho_flow': rho_flow_EL,
-                    'time_scale_ratio': time_scale_ratio,
-                    'regime': 'EL',
-                })
-
-                # Optionally compute outflow T & P
-                if pureHHe:
-                    mmw_outflow = self.params.mmw_HHe # <---- for pure H/He outflow
-                    T_outflow = (cs_use**2 * m_H * mmw_outflow) / k_b
-                    P_EUV = rho_EUV_EL * k_b * T_outflow / (m_H * mmw_outflow)
-                    result.update({
-                        'T_outflow': T_outflow,
-                        'P_EUV': P_EUV
-                    })
-
-                # Recombination-limited (RL) regime check
-                if time_scale_ratio < 1:
-                    REUV_solution_RL, rho_EUV_RL, rho_flow_RL = self.find_REUV_solution_RL(r_planet, m_planet, rho_photo, cs_eq, FEUV_photon)
-                    cs_use_RL = 1.2e6
-                    Hflow_RL = min(REUV_solution_RL / 3, cs_use_RL**2 * REUV_solution_RL**2 / (2 * G * m_planet))
-                    nb = np.sqrt(FEUV_photon / (alpha_rec * Hflow_RL))
-                    Rs_RL = G * m_planet / (2. * cs_use_RL**2)
-                    u_RL = (FS.get_parker_wind_single(REUV_solution_RL, cs_use_RL, Rs_RL)
-                        if REUV_solution_RL <= Rs_RL
-                        else cs_use_RL)
-                    # Mdot_RL = 4 * np.pi * REUV_solution_RL**2 * m_H * nb * u_RL
-                    Mdot_RL = self.compute_mdot_only(cs_use_RL, REUV_solution_RL, m_planet)
-
-                    result.update({
-                        'REUV': REUV_solution_RL,
-                        'cs': cs_use_RL,
-                        'Mdot': Mdot_RL,
-                        'RS_flow': Rs_RL,
-                        'rho_REUV': rho_EUV_RL,
-                        'rho_flow': rho_flow_RL,
-                        'regime': 'RL',
-                    })
-
-                    # Optionally compute outflow T & P
-                    if pureHHe:
-                        mmw_outflow = self.params.mmw_HHe # <---- for pure H/He outflow
-                        T_outflow = (cs_use**2 * m_H * mmw_outflow) / k_b
-                        P_EUV = rho_EUV_RL * k_b * T_outflow / (m_H * mmw_outflow)
-                        result.update({
-                            'T_outflow': T_outflow,
-                            'P_EUV': P_EUV
-                        })
-
-                if result['RS_flow'] >= result['REUV']:
-                    mass_loss_results.append(result)
-                else:
-                    print(
-                        f"Warning: Check for CPML. RS_flow ({result['RS_flow']:.2e}) < REUV ({result['REUV']:.2e}) "
-                        f"for planet mass={m_planet/self.params.mearth:.2f} M_earth"
-                    )
-                    mass_loss_results.append(result)
-
-            except Exception as e:
-                print(f"Error for planet {m_planet/self.params.mearth:.2f} Mearth and radius {r_planet/self.params.rearth:.2f} Rearth: {e}")
         
-        return mass_loss_results
+        results = []
+        mode = self.params.outflow_mode
+        for m_p, r_p, T in zip(m_p, r_planet, teq):
+            FEUV = self.params.get_param('FEUV')
+            E_photon = self.params.E_photon
+            FEUV_photon = FEUV/E_photon
+            alpha, G, k_b, m_H = self.params.alpha_rec, self.params.G, self.params.k_b, self.params.m_H
+            
+            # select base μ and opacity
+            if mode=='HHe':
+                μ_base, κ_base = self.params.mmw_HHe, self.params.kappa_p_HHe
+            elif mode=='H2O':
+                μ_base, κ_base = self.params.mmw_H2O, self.params.kappa_p_H2O
+            elif mode == 'HHe_H2O':
+                μ_base, κ_base = self.params.mmw_HHe_H2O, self.params.kappa_p_HHe_H2O
+            else:
+                raise ValueError(f"Unknown outflow_mode '{mode}'")
+            
+            # photo layer
+            cs_eq   = np.sqrt(k_b*T/(m_H*μ_base))
+            rho_photo  = G * m_p / r_p**2 / (κ_base * cs_eq**2)
+
+
+            # Energy-limited (EL) regime calculations
+            REUV_solution_EL, time_scale_ratio, rho_EUV_EL, rho_flow_EL = self.find_REUV_solution_EL(r_p, m_p, rho_photo, cs_eq, FEUV_photon)
+            cs_use = self.compute_sound_speed(REUV_solution_EL, m_p)
+            cs_use = min(cs_use, 1.2e6) # Limit sound speed to T ~ 10^4 K
+            Mdot_EL = self.compute_mdot_only(cs_use, REUV_solution_EL, m_p)
+            RS_flow = G * m_p / (2 * cs_use**2)
+
+            sol = {'m_planet':m_p,'r_planet':r_p,'Teq':T,
+                'REUV':REUV_solution_EL,'cs':cs_use,'Mdot':Mdot_EL,
+                'RS_flow':RS_flow,'rho_EUV':rho_EUV_EL,'rho_flow':rho_flow_EL,
+                'time_scale_ratio':time_scale_ratio,'regime':'EL'}
+
+            # Recombination-limited (RL) regime check
+            if time_scale_ratio < 1:
+                REUV_solution_RL, rho_EUV_RL, rho_flow_RL = self.find_REUV_solution_RL(r_p, m_p, rho_photo, cs_eq, FEUV_photon)
+                cs_use_RL = 1.2e6
+                Rs_RL = G * m_p / (2. * cs_use_RL**2)
+                # Mdot_RL = 4 * np.pi * REUV_solution_RL**2 * m_H * nb * u_RL
+                Mdot_RL = self.compute_mdot_only(cs_use_RL, REUV_solution_RL, m_p)
+
+                sol.update({'REUV':REUV_solution_RL,'cs':1.2e6,'Mdot':Mdot_RL,'RS_flow': Rs_RL,'rho_EUV':rho_EUV_RL,'rho_flow':rho_flow_RL,'regime':'RL'})
+
+            # For pure H/He mode, compute outflow temperature and pressure
+            if mode == 'HHe':
+                mmw_out = self.params.mmw_HHe
+                T_out = sol['cs']**2 * m_H * mmw_out / k_b
+                P_EUV = sol['rho_EUV'] * k_b * T_out / (m_H * mmw_out)
+                sol.update({'T_outflow': T_out, 'P_EUV': P_EUV})
+
+            results.append(sol)
+        return results
