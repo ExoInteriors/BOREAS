@@ -47,7 +47,8 @@ class ModelParams:
         # --- Model-specific parameters
         self.kappa_p_HHe        = 1e-2  # opacity to outgoing thermal radiation, i.e. mean opacity in infrared 
         self.kappa_p_H2O        = 1     # ↳ roughly pump up the H one by 100
-        self.kappa_p_HHe_H2O    = 0.11  # ↳ approximate this for 10% water
+        self.kappa_p_HHe_H2O = self.X_HHe * self.kappa_p_HHe + self.X_H2O * self.kappa_p_H2O # approximation of the opacity in the mixed envelope
+        # self.kappa_p_HHe_H2O    = 0.11  # ↳ approximate this for 10% water
         # self.kappa_p_HHe_H2O    = 0.2   # ↳ approximate this for 20% water
         # self.kappa_p_HHe_H2O    = 0.5   # ↳ approximate this for 50% water
         # self.kappa_p_HHe_H2O    = 0.7   # ↳ approximate this for 70% water
@@ -62,6 +63,7 @@ class ModelParams:
         self.sigma_EUV  = 1.89e-18      # EUV cross-section (of H? H2? similar for O), cm2
         self.alpha_rec  = 2.6e-13       # Recombination coefficient, cm3 s-1
         self.eff        = 0.3           # Mass-loss efficiency factor
+        self.aplau      = 1.            # semi-major axis in astronomical units
 
     def update_param(self, param_name, value):
         """Dynamically update a parameter value."""
