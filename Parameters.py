@@ -64,3 +64,4 @@ class ModelParams:
         self.sigma_EUV  = 1.89e-18       # EUV cross-section (of H? H2? similar for O), cm2
         self.alpha_rec  = 2.6e-13        # Recombination coefficient, cm3 s-1
         self.eff        = 0.3            # Mass-loss efficiency factor
+        self.aplau      = 1.             # semi-major axis of the planet
