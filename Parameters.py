@@ -6,7 +6,27 @@ class ModelParams:
     def update_param(self, param_name, value):
         """Dynamically update a parameter value."""
         if hasattr(self, param_name):
-            setattr(self, param_name, value)
+            # special cases to keep the coherence of the attributes
+            # attributes N_tot, mmw_HHe_H2O_outflow, kappa_p_HHe_H2O should not be modified directly
+            # maybe they should be put protected/private
+            if param_name == 'X_H2O':
+                setattr(self, 'X_H2O', value)
+                setattr(self, 'X_HHe', 1-value)
+                N_HHe = self.X_HHe / self.mmw_HHe_outflow 
+                N_H2O = self.X_H2O / self.mmw_H2O_outflow
+                setattr(self, 'N_tot', N_HHe + N_H2O)
+                setattr(self, 'mmw_HHe_H2O_outflow', 1 / self.N_tot)
+                setattr(self, 'mmw_HHe_H2O', self.X_HHe * self.mmw_HHe + self.X_H2O * self.mmw_H2O)
+            elif param_name == 'X_HHe':
+                setattr(self, 'X_HHe', value)
+                setattr(self, 'X_H2O', 1-value)
+                N_HHe = self.X_HHe / self.mmw_HHe_outflow 
+                N_H2O = self.X_H2O / self.mmw_H2O_outflow
+                setattr(self, 'N_tot', N_HHe + N_H2O)
+                setattr(self, 'mmw_HHe_H2O_outflow', 1 / self.N_tot)
+                setattr(self, 'mmw_HHe_H2O', self.X_HHe * self.mmw_HHe + self.X_H2O * self.mmw_H2O)
+            else:
+                setattr(self, param_name, value)
         else:
             raise AttributeError(f"Parameter '{param_name}' does not exist.")
     
