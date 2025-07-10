@@ -4,7 +4,7 @@ This repository implements a coupled photoevaporative mass loss and chemical fra
 
 HHe: Pure H/He (no fractionation)
 H2O: Pure steam (H₂O)
-HHe_H2O: Mixed H/He + H₂O outflow with self‑consistent fractionation
+HHe_H2O: Mixed H2 + H2O outflow with self‑consistent fractionation
 
 
 
@@ -13,7 +13,7 @@ Features
 1. Mass Loss Module (Mass_Loss_Class.py):
 - Computes XUV‑driven mass loss rate in both energy‑limited (EL) and recombination‑limited (RL) regimes.
 - Handles dissociated vs. non‑dissociated outflow compositions (modeled by outflow_mode).
-- Οutputs , sound speed, mass‑loss rate, density profiles, timescale diagnostics, and more.
+- Οutputs R_XUV, sound speed, mass‑loss rate, density profiles, timescale diagnostics, and more.
 
 2. Fractionation Module (Fractionation_Class.py): 
 - Implements the Zahnle & Kasting (1986) H/O fractionation formalism.
