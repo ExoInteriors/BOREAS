@@ -32,11 +32,11 @@ Features
 
 Installation
 
-git clone https://github.com/ExoInteriors/Mass-Loss.git
-cd Mass-Loss
-python -m venv venv
-source venv/bin/activate
-pip install (any requirements, like numpy)
+- git clone https://github.com/ExoInteriors/Mass-Loss.git
+- cd Mass-Loss
+- python -m venv venv
+- source venv/bin/activate
+- pip install (any requirements, like numpy)
 
 Configuration & Key Parameters
 
