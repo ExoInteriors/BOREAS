@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import brentq
-from Flow_Solutions_Class import FlowSolutions as FS
+from Functions.Flow_Solutions_Class import FlowSolutions as FS
 
 class MassLoss:
     def __init__(self, params):
