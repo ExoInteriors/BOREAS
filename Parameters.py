@@ -17,6 +17,7 @@ class ModelParams:
                 setattr(self, 'N_tot', N_HHe + N_H2O)
                 setattr(self, 'mmw_HHe_H2O_outflow', 1 / self.N_tot)
                 setattr(self, 'mmw_HHe_H2O', self.X_HHe * self.mmw_HHe + self.X_H2O * self.mmw_H2O)
+                setattr(self, 'kappa_p_HHe_H2O', self.X_HHe * self.kappa_p_HHe + self.X_H2O * self.kappa_p_H2O)
             elif param_name == 'X_HHe':
                 setattr(self, 'X_HHe', value)
                 setattr(self, 'X_H2O', 1-value)
@@ -25,6 +26,7 @@ class ModelParams:
                 setattr(self, 'N_tot', N_HHe + N_H2O)
                 setattr(self, 'mmw_HHe_H2O_outflow', 1 / self.N_tot)
                 setattr(self, 'mmw_HHe_H2O', self.X_HHe * self.mmw_HHe + self.X_H2O * self.mmw_H2O)
+                setattr(self, 'kappa_p_HHe_H2O', self.X_HHe * self.kappa_p_HHe + self.X_H2O * self.kappa_p_H2O)
             else:
                 setattr(self, param_name, value)
         else:
