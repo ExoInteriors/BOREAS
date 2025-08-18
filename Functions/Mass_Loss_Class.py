@@ -198,7 +198,7 @@ class MassLoss:
             FEUV = self.params.get_param('FEUV')
             E_photon = self.params.E_photon
             FEUV_photon = FEUV/E_photon
-            alpha, G, k_b, m_H = self.params.alpha_rec, self.params.G, self.params.k_b, self.params.m_H
+            G, k_b, m_H = self.params.G, self.params.k_b, self.params.m_H
             
             # select base μ and opacity
             if mode=='HHe':
@@ -210,6 +210,8 @@ class MassLoss:
             else:
                 raise ValueError(f"Unknown outflow_mode '{mode}'")
             
+            print('mu', μ_base, '\n kappa', κ_base)
+
             # photo layer
             cs_eq   = np.sqrt(k_b*T/(m_H*μ_base))
             rho_photo  = G * m_p / r_p**2 / (κ_base * cs_eq**2)

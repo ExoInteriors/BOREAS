@@ -13,7 +13,7 @@ import json
 params          = ModelParams()
 mearth          = params.mearth             # mass of earth, in grams
 rearth          = params.rearth             # radius of earth, in cm
-params.update_param('outflow_mode','HHe')   # set desired outflow mode: 'HHe', 'H2O', or 'HHe_H2O'
+params.update_param('outflow_mode','HHe_H2O')   # set desired outflow mode: 'HHe', 'H2O', or 'HHe_H2O'
 params.update_param('X_H2O', 0.1)           # only relevant for 'HHe_H2O' mode
 mass_loss       = MassLoss(params)
 fractionation   = Fractionation(params)

@@ -37,7 +37,7 @@ class ModelParams:
         return getattr(self, param_name, None)
 
     def __init__(self):
-        self.outflow_mode = 'HHe_H2O' # 'HHe' for pure H/He, 'H2O' for pure steam, 'HHe_H2O' for mixed
+        self.outflow_mode = 'HHe' # 'HHe' for pure H/He, 'H2O' for pure steam, 'HHe_H2O' for mixed
 
         # --- Physical constants
         self.am_h           = 1                                  # Αtomic mass hydrogen, u

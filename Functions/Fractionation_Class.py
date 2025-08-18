@@ -118,7 +118,6 @@ class Fractionation:
         Iteratively update mmw_outflow until convergence.
         """
         mode = self.params.outflow_mode
-
         if mode == 'HHe':
             return mass_loss_results
         
