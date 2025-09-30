@@ -1,98 +1,195 @@
-Photoevaporative Mass Loss & Chemical Fractionation Model
+# BOREAS
 
-This repository implements a coupled photoevaporative mass loss and chemical fractionation model for the atmospheres of super-Earths and sub-Neptunes.It supports three outflow modes:
+Hydrodynamic mass loss (EL/RL) with multi-species fractionation (H–O–C–N–S).  
+The bolometric (IR) region is **molecular**, while the escaping outflow is **fully dissociated atoms**.
 
-HHe: Pure H/He (no fractionation)
-H2O: Pure steam (H₂O)
-HHe_H2O: Mixed H2 + H2O outflow with self‑consistent fractionation
+> Package name: **boreas** · Import name: **boreas**  
+> Requires **Python ≥ 3.9**
+
+---
+
+## Installation
+
+### Option A — install from this repo (recommended for development)
+
+```bash
+# from the repo root:
+python -m venv .venv
+source .venv/bin/activate # Windows: .venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+### Option B — one-liner install from GitHub
+
+```bash
+pip install "boreas @ git+https://github.com/ExoInteriors/BOREAS.git@proteus#subdirectory=BOREAS_PROTEUS"
+```
+
+## Quick start (run an example)
+
+### Examples live in examples/configs/. Use the runner:
+
+```bash
+# default example (k2-18b.toml)
+python examples/run_single_planet.py
+
+# explicit config (relative or absolute path)
+python examples/run_single_planet.py --config examples/configs/k2-18b.toml
+
+# extra prints
+python examples/run_single_planet.py -v -c examples/configs/k2-18b.toml
+```
+
+### Typical output
+
+```bash
+Config: /.../examples/configs/k2-18b.toml
+Planet: K2-18 b
+Regime: EL  RXUV[cm]: 1.23e+09  Mdot[g/s]: 4.56e+08
+light_major: H  heavy_major: O
+T_outflow[K]: 10000.0  mu_outflow: 1.02
+```
+
+> Notebook users: relative paths resolve from the notebook’s working directory. Either cd to the repo root first, or build an absolute Path to the TOML.
 
 
+## How to run your own planet
 
-Features
+1. Copy an example file:
+```bash
+cp examples/configs/k2-18b.toml myplanet.toml
+```
+2. Edit myplanet.toml (see the full schema below).
+3. Run it:
+```bash
+python examples/run_single_planet.py --config myplanet.toml
+```
 
-1. Mass Loss Module (Mass_Loss_Class.py):
-- Computes XUV‑driven mass loss rate in both energy‑limited (EL) and recombination‑limited (RL) regimes.
-- Handles dissociated vs. non‑dissociated outflow compositions (modeled by outflow_mode).
-- Οutputs R_XUV, sound speed, mass‑loss rate, density profiles, timescale diagnostics, and more.
+## Saving results
 
-2. Fractionation Module (Fractionation_Class.py): 
-- Implements the Zahnle & Kasting (1986) H/O fractionation formalism.
-- In self‑consistent mode, iteratively updates the outflow mean molecular weight based on the computed H/O fluxes and re‑runs the hydrodynamic solver until convergence.
-- Outputs partial mass fluxes, oxygen fractionation factor, updated mean molecular weight of the outflow, outflow temperature, and pressure.
+### The runner can write results to JSON and/or CSV:
 
-3. Data Loader (Model_Data_Loader.py): 
-- Reads precomputed planetary data files from the MR code (Dorn group) (*.ddat).
+```bash
+# JSON (full structure)
+python examples/run_single_planet.py -c examples/configs/k2-18b.toml --json out/k2_18b_results.json
 
-4. Star Parameters (Star_Parameters_Class.py): 
-- Converts equilibrium temperature to received bolometric flux.
-- Provides stellar XUV flux evolution and range for a given  and stellar age.
+# CSV (compact table of key outputs)
+python examples/run_single_planet.py -c examples/configs/k2-18b.toml --csv  out/k2_18b_summary.csv
+```
 
-5. Miscellaneous Utilities (Misc_Class.py):
-- Contains helper functions
+## Config file schema (TOML)
 
-Installation
+### A config describes one planet and the physics knobs. Example:
+```bash
+[planet]
+name           = "K2-18 b"      # use packaged properties (mass, radius, Teq)
+FXUV_erg_cm2_s = "from_data"    # or a number (stellar irradiance at orbit; cm^-2 s^-1 * erg)
 
-- git clone https://github.com/ExoInteriors/Mass-Loss.git
-- cd Mass-Loss
-- python -m venv venv
-- source venv/bin/activate
-- pip install (any requirements, like numpy)
+[composition]                  # MASS fractions (sum≈1). Auto-normalized if enabled
+H2  = 0.90
+H2O = 0.10
+O2  = 0.0
+CO2 = 0.0
+CO  = 0.0
+CH4 = 0.0
+N2  = 0.0
+NH3 = 0.0
+H2S = 0.0
+SO2 = 0.0
+S2  = 0.0
 
-Configuration & Key Parameters
+[physics]
+efficiency = 0.30               # η in the EL closure (dimensionless)
+albedo     = 0.30
+beta       = 0.75               # dayside redistribution factor (unused in core solver)
+emissivity = 1.0
 
-All model parameters are defined in Parameters.py via the ModelParams class. Key fields:
+[xuv.sigma_cm2]                 # Atomic XUV cross-sections for the DISSOCIATED outflow (cm^2)
+H = 1.89e-18
+O = 2.00e-18
+C = 2.50e-18
+N = 3.00e-18
+S = 6.00e-18
 
-- outflow_mode: one of 'HHe', 'H2O', 'HHe_H2O' (default 'H2O').
-- FEUV: incident XUV flux (erg cm⁻² s⁻¹).
-- X_H2O, X_HHe: mass fractions of water and H/He in the mixed mode.
-- kappa_p_HHe, kappa_p_H2O, kappa_p_HHe_H2O: infrared opacities for each composition.
+[infrared.kappa_cm2_g]          # IR mass opacities for the MOLECULAR region (cm^2 g^-1)
+H2  = 1.0e-2
+H2O = 1.0
+O2  = 1.0
+CO2 = 1.0
+CO  = 1.0
+CH4 = 1.0
+N2  = 1.0
+NH3 = 1.0
+H2S = 1.0
+SO2 = 1.0
+S2  = 1.0
 
-You can override defaults either by editing ModelParams.__init__ or at runtime, e.g.,:
-params = ModelParams()
-params.update_param('outflow_mode', 'HHe_H2O')
-params.update_param('FEUV', 1e3)
-params.update_param('X_H2O', 0.2)
+[diffusion.b]                   # Binary diffusion fits b_ij(T)=A*T^gamma (cm^-1 s^-1)
+# Keys can be "HO" or "H-O" (order-insensitive); symmetry is inferred.
+HO = { A=4.8e17, gamma=0.75 }
+HC = { A=6.5e17, gamma=0.70 }
+HN = { A=5.0e17, gamma=0.73 }
+HS = { A=5.8e17, gamma=0.70 }
+OC = { A=8.6e16, gamma=0.76 }
+ON = { A=9.0e16, gamma=0.78 }
+OS = { A=8.5e16, gamma=0.78 }
+CN = { A=7.5e16, gamma=0.74 }
+CS = { A=7.2e16, gamma=0.74 }
+NS = { A=8.0e16, gamma=0.76 }
 
-Running the Model
+[fractionation]
+allow_dynamic_light_major = true  # let the code choose i (usually H)
+forced_light_major        = "H"   # used only if the above is false
+tol                       = 1e-5  # μ_outflow convergence tolerance
+max_iter                  = 100   # max fractionation iterations
 
-Use Main.py as the driver:
-1.	Set outflow mode at top:
- 	params.update_param('outflow_mode', 'HHe_H2O')
-2.	Load planetary data:
-    - Bulk .ddat file via ModelDataLoader.load_single_ddat_file(...) or
-    - Single planet from planet_params.json.
-3.	Loop over unique (T_{})** values**:
- 	for Teq in unique_Teqs:
-    star_params.update_param('Teq', Teq)
-    flux_range = star_params.get_FEUV_range_any_age()
-    for FEUV in flux_range:
-        params.update_param('FEUV', FEUV)
-        mass_loss_results = mass_loss.compute_mass_loss_parameters(...)
-        fractionation_results = fractionation.execute_self_consistent_fractionation(...)
-        ...
-4.	Save outputs to CSV:
- 	import pandas as pd
-    rows = []
-    for entry in all_flux_results:
-        for sol in entry['results']:
-            record = {'FEUV': entry['FEUV'], ...}
-            record.update(sol)
-            rows.append(record)
-    df = pd.DataFrame(rows)
-    df.to_csv('results.csv', index=False)
+[advanced]
+auto_normalize_X = true           # if composition mass fractions don’t sum to 1, rescale them
+```
 
-Outputs
-- Mass loss: REUV, cs, dot M, rho_EUV, rho_flow, regime (EL or RL), etc.
-- Fractionation: phi_H, phi_O, x_O, mmw_outflow, T_outflow, P_EUV.
-You can easily load into pandas via pd.read_csv() for analysis and plotting.
+### Notes & units
+- FXUV: if you set a number, use stellar irradiance at orbit (erg cm⁻² s⁻¹). If you use "from_data", the value is read from packaged planet_params.json.
+- EL normalization: the model uses the Owen/Schlichting convention with the factor of 4 (absorb over πR², lose over 4πR²). If you pass a global-mean FXUV (already ÷4), set that numeric value directly.
+- Composition: mass fractions of molecules in the bolometric region; outflow is atomic (the code handles the bookkeeping).
+- σ_XUV: atomic photoabsorption cross-sections (cm²).
+- κ_IR: IR mass opacities (cm² g⁻¹) for the hydrostatic molecular layer.
+- b_ij(T): binary diffusion coefficients in cm⁻¹ s⁻¹; the model uses gram masses and k_B in erg/K consistently.
 
-References
+## Built-in planet data
 
-Model for Mass Loss from:
-Owen, J. E., & Schlichting, H. E. (2023). Mapping out the parameter space for photoevaporation and core-powered mass-loss (arXiv:2308.00020). arXiv. https://doi.org/10.48550/arXiv.2308.00020
+### Packaged under boreas.data/planet_params.json (mass [M⊕], radius [R⊕], Teq [K], FXUV [erg cm⁻² s⁻¹]). 
+### Use [planet].name = "<key>" to pull those numbers. You can open that JSON to see available keys.
 
-Model for Fractionation from:
-Zahnle, K. J., & Kasting, J. F. (1986). Mass fractionation during transonic escape and implications for loss of water from Mars and Venus. Icarus, 68(3), 462–480. https://doi.org/10.1016/0019-1035(86)90051-5
+## Running tests (optional but helpful)
 
-Model for F_XUV vs Teq from:
-Rogers, J. G., Gupta, A., Owen, J. E., & Schlichting, H. E. (2021). Photoevaporation vs. core-powered mass-loss: Model comparison with the 3D radius gap. Monthly Notices of the Royal Astronomical Society, 508(4), 5886–5902. https://doi.org/10.1093/mnras/stab2897
+```bash
+python -m pip install pytest
+python -m pytest -q
+```
+
+### This runs unit tests that lock in:
+- grams vs amu usage in diffusion/fractionation formulas,
+- diffusion- vs energy-limited branch behavior when heavy species “stall”,
+- well-formed diffusion fits and bounded entrainment fractions.
+
+## Repo Layout
+
+```bash
+BOREAS/
+├─ src/boreas/
+│  ├─ __init__.py
+│  ├─ parameters.py             # constants, composition, cross-sections, diffusion fits
+│  ├─ mass_loss.py              # EL/RL solver, Parker wind normalization, RXUV search
+│  ├─ fractionation.py          # Odert-style multi-species fractionation
+│  ├─ config.py                 # TOML I/O and param application
+│  ├─ data/planet_params.json   # M, R, Teq, FXUV planet calatog
+│  └─ examples/configs/         # (optional) ship example TOMLs here if desired
+├─ examples/
+│  ├─ configs/k2-18b.toml
+│  └─ run_single_planet.py
+├─ tests/
+│  └─ test_fractionation_units.py
+├─ pyproject.toml
+└─ README.md
+```
