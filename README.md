@@ -10,7 +10,7 @@ The bolometric (IR) region is **molecular**, while the escaping outflow is **ful
 
 ## Installation
 
-### Option A — install from this repo (recommended for development)
+### Option A — install from this repo
 
 ```bash
 # from the repo root:
@@ -20,10 +20,10 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-### Option B — one-liner install from GitHub
+### Option B — one-liner install from GitHub (link might be broken)
 
 ```bash
-pip install "boreas @ git+https://github.com/ExoInteriors/BOREAS.git@proteus#subdirectory=BOREAS_PROTEUS"
+pip install "boreas @ git+https://github.com/ExoInteriors/BOREAS.git@proteus#"
 ```
 
 ## Quick start (run an example)
