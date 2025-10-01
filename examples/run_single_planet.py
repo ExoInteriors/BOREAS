@@ -1,9 +1,9 @@
 from __future__ import annotations
 from pathlib import Path
 import argparse
-import tomllib
 import numpy as np
 
+from boreas.config import load_config_toml
 from boreas import ModelParams, MassLoss, Fractionation
 from boreas.config import apply_params_from_config, build_inputs_from_config, fractionation_runtime_args
 
@@ -33,7 +33,7 @@ def main(cfg_path: Path, verbose: bool = False):
     if verbose:
         print(f"[runner] reading config: {cfg_path}")
     with cfg_path.open("rb") as f:
-        cfg = tomllib.load(f)
+        cfg = load_config_toml(cfg_path)
 
     if verbose:
         print("[runner] init params/mass-loss/fractionation")

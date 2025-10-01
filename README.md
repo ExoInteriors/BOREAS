@@ -64,6 +64,8 @@ cp examples/configs/k2-18b.toml myplanet.toml
 3. Run it:
 ```bash
 python examples/run_single_planet.py --config myplanet.toml
+# OR
+python examples/run_single_planet.py -v -c myplanet.toml
 ```
 
 ## Saving results

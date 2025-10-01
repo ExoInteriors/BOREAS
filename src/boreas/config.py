@@ -2,18 +2,15 @@ from __future__ import annotations
 from importlib.resources import files
 from .parameters import ModelParams
 from typing import Dict, Any
+from boreas.data import load_planet_params
 
 import math
-import tomllib
 
 # TOML loader: stdlib for 3.11+, fallback to 'tomli' for 3.9–3.10
-try:  # py>=3.11
-    import tomllib as _toml
-except ModuleNotFoundError: # py 3.9–3.10
-    import tomli as _toml
-
-from importlib.resources import files
-from .parameters import ModelParams
+try:
+    import tomllib as _toml  # py>=3.11
+except ModuleNotFoundError:
+    import tomli as _toml     # py 3.9–3.10
 
 _COMPOSITION_KEYS = ["H2","H2O","O2","CO2","CO","CH4","N2","NH3","H2S","SO2","S2"]
 _XATTR = {name: f"X_{name}" for name in _COMPOSITION_KEYS}
@@ -23,9 +20,10 @@ def load_config_toml(path: str) -> Dict[str, Any]:
         return _toml.load(f)
 
 def _load_builtin_planets() -> Dict[str, Any]:
-    data_path = files("boreas.data") / "planet_params.json"
-    import json
-    return json.loads(data_path.read_text(encoding="utf-8"))
+    return load_planet_params()
+    # data_path = files("boreas.data") / "planet_params.json"
+    # import json
+    # return json.loads(data_path.read_text(encoding="utf-8"))
 
 def build_inputs_from_config(cfg: Dict[str, Any], params: ModelParams):
     """
@@ -60,12 +58,13 @@ def build_inputs_from_config(cfg: Dict[str, Any], params: ModelParams):
 
 def apply_params_from_config(cfg: Dict[str, Any], params: ModelParams):
     """Apply user-facing config knobs to ModelParams only (no hydro/fractionation here)."""
-        # --- composition ---
+    # --- composition ---
     comp = cfg.get("composition", {})
     if not comp:
         raise ValueError("Config must include a [composition] section.")
     auto_norm = bool(cfg.get("advanced", {}).get("auto_normalize_X", True))
-    params.set_composition(comp, auto_normalize=auto_norm)
+    params.enable_auto_normalize(cfg.get("advanced", {}).get("auto_normalize_X", False))
+    params.set_composition(cfg["composition"])
 
     # --- planet block & FXUV ---
     planet = cfg.get("planet", {})
@@ -132,11 +131,9 @@ def fractionation_runtime_args(cfg: Dict[str, Any]):
 
 # Utility: load a field from packaged planet data
 def _load_planet_field(name: str, field: str):
-    data_path = files("boreas.data") / "planet_params.json"
-    import json
-    planet_params = json.loads(data_path.read_text(encoding="utf-8"))
-    if name not in planet_params:
+    planets = load_planet_params()
+    if name not in planets:
         raise KeyError(f"Planet '{name}' not found in packaged data.")
-    if field not in planet_params[name]:
+    if field not in planets[name]:
         raise KeyError(f"Field '{field}' not present for planet '{name}'.")
-    return planet_params[name][field]
+    return planets[name][field]

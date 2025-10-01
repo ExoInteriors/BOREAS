@@ -272,7 +272,7 @@ class Fractionation:
                 # Find the current light-major i (independent of T, so a provisional T is fine):
                 i_now, _, _ = FractionationPhysics.choose_light_and_heavy_major(self.params, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp)
 
-                if (hydro['regime'] == 'RL') or (i_now == 'H'):
+                if (hydro['regime'] == 'RL'):
                     # Use ~1e4 K for the outflow when H controls the thermodynamics (RL or i=H)
                     T_out = 1.0e4  # K
                 else:
@@ -298,12 +298,13 @@ class Fractionation:
             
             # ---- pack outputs for this planet ----
             RXUV, cs, Mdot = final_hydro['RXUV'], final_hydro['cs'], final_hydro['Mdot']
-            T_out_final    = self.phys.T_outflow_from_cs(cs, mu_eff)
+            T_used    = T_out                                   # this is what is used in fractionation. If RL, only then we set it to 1e4 K.
+            T_from_cs = self.phys.T_outflow_from_cs(cs, mu_eff) # this is what would be calculated from cs. To compare only with RL right now.
 
             # fallbacks if (pathologically) final_res is None
             if final_res is None:
                 # Single-shot; run once to populate fields
-                Fmass = Mdot / (4.0*np.pi*RXUV**2)
+                Fmass = Mdot / (4.0 * np.pi * RXUV**2)
                 final_res = self.general.compute_fluxes(
                     Fmass, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp,
                     allow_dynamic_light_major=allow_dynamic_light_major,
@@ -325,9 +326,11 @@ class Fractionation:
                 # who is i / j:
                 'light_major_i': final_res['i'], 'heavy_major_j': final_res['j'],
                 # thermodynamics:
-                'mmw_outflow': mu_eff, 'T_outflow': T_out_final,
+                'mmw_outflow': mu_eff, 
+                'T_outflow': T_used,                        # used for fractionation
+                'T_from_cs_mu': T_from_cs,                  # diagnostic
                 # regimes:
-                'fractionation_mode': final_res['mode'], # Odert branch (energy- vs diffusion-limited in the multi-species sense)
+                'fractionation_mode': final_res['mode'],    # Odert branch (energy- vs diffusion-limited in the multi-species sense)
                 # 'regime' stays whatever mass_loss reported (EL/RL)
             })
 

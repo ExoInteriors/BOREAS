@@ -47,7 +47,7 @@ class MassLoss:
 
         # integrate Parker wind to get tau geometrically
         rho_shape = (RS_flow / r)**2 * (cs / u)                     # dimensionless (from continuity rho u r^2 = const). captures how density falls with r, independent of units
-        tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))            # geometric column, cm
+        tau = np.abs(np.trapezoid(rho_shape[::-1], r[::-1]))        # geometric column, cm
         
         # mass absorption coefficient at XUV for mixtures
         chi_xuv = self.params.xuv_cross_section_per_mass()          # mass absorption coefficient at XUV for mixtures
@@ -69,7 +69,7 @@ class MassLoss:
         G, FXUV, eta = self.params.G, self.params.get_param('FXUV'), self.params.eff
         Mdot_EL = eta * np.pi * RXUV**3 / (4 * G * m_planet) * FXUV # FXUV is the planet-wide averaged absorbed flux (i.e., already divided by 4 compared to the stellar flux at the orbit)? Hence we multiply by 1/4
 
-        lower_bound_initial, upper_bound = 2e5, 1e13
+        lower_bound_initial, upper_bound = 1e5, 1e8 # initially 2e5, 1e13
 
         def mdot_difference(cs):
             Mdot = self.compute_mdot_only(cs, RXUV, m_planet)
@@ -92,7 +92,9 @@ class MassLoss:
         G, alpha = self.params.G, self.params.alpha_rec
 
         # the same hydrostatic profile rho_bolo (density at the bolometric photosphere), but evaluated at the XUV base
-        rho_eq = rho_bolo * np.exp((G * m_planet / cs_bolo**2) * (1. / RXUV - 1. / r_planet))
+        expo = (G * m_planet / cs_bolo**2) * (1.0 / RXUV - 1.0 / r_planet)
+        expo = np.clip(expo, -60.0, 60.0)
+        rho_eq = rho_bolo * np.exp(expo)
         cs_outflow = self.compute_sound_speed(RXUV, m_planet)
         cs_outflow = min(cs_outflow, 1.2e6) # Limit sound speed to T ~ 10^4 K
         Mdot = self.compute_mdot_only(cs_outflow, RXUV, m_planet)
@@ -124,7 +126,7 @@ class MassLoss:
         RXUV solution for the energy-limited (EL) case.
         """
         RXUV_lower_bound = r_planet * 1.001
-        RXUV_upper_bound = r_planet * 5
+        RXUV_upper_bound = r_planet * 3
 
         def root_function(RXUV):
             diff, _, _, _ = self.compare_densities_EL(RXUV, rho_bolo, r_planet, m_planet, cs_bolo, FXUV_photon)
@@ -156,7 +158,9 @@ class MassLoss:
         G, m_H, alpha_rec = self.params.G, self.params.m_H, self.params.alpha_rec
 
         # the same hydrostatic profile rho_bolo (density at the bolometric photosphere), but evaluated at the XUV base
-        rho_eq = rho_bolo * np.exp((G * m_planet / cs_bolo**2) * (1. / RXUV - 1. / r_planet)) 
+        expo = (G * m_planet / cs_bolo**2) * (1.0 / RXUV - 1.0 / r_planet)
+        expo = np.clip(expo, -60.0, 60.0)
+        rho_eq = rho_bolo * np.exp(expo)
 
         cs_RL = 1.2e6 # Sound speed for T ~ 10^4 K
         Hflow = min(RXUV / 3, cs_RL**2 * RXUV**2 / (2 * G * m_planet))
@@ -182,7 +186,7 @@ class MassLoss:
         RXUV solution for the recombination-limited (RL) case.
         """
         RXUV_lower_bound = r_planet * 1.001
-        RXUV_upper_bound = r_planet * 5
+        RXUV_upper_bound = r_planet * 3
 
         def root_function(RXUV):
             diff, _, _ = self.compare_densities_RL(RXUV, rho_bolo, r_planet, m_planet, cs_bolo, FXUV_photon)
@@ -226,12 +230,13 @@ class MassLoss:
             mu_bolo    = self.params.get_mmw_bolometric()
             cs_bolo    = np.sqrt(k_b * T_eq / (m_H * mu_bolo))          # always calculated with bolometric mu 
             kappa_bolo = self.params.kappa_p_all
+            # kappa_bolo = np.clip(self.params.kappa_p_all, 1e-3, 10.0)   # tune bounds
             rho_bolo   = G * m_p / r_p**2 / (kappa_bolo * cs_bolo**2)   # the anchor density at r=Rp used to get rho_XUV by an isothermal scale height.
 
             # Energy-limited (EL) regime calculations
             RXUV_solution_EL, time_scale_ratio, rho_XUV_EL, rho_flow_EL = self.find_RXUV_solution_EL(r_p, m_p, rho_bolo, cs_bolo, FXUV_photon)
             cs_outflow = self.compute_sound_speed(RXUV_solution_EL, m_p)
-            cs_outflow = min(cs_outflow, 1.2e6) # Limit sound speed to T ~ 10^4 K
+            cs_outflow = min(cs_outflow, 1.2e6)                         # Limit sound speed to T ~ 10^4 K
             Mdot_EL = self.compute_mdot_only(cs_outflow, RXUV_solution_EL, m_p)
             RS_flow = G * m_p / (2 * cs_outflow**2)
 

@@ -57,6 +57,9 @@ class ModelParams:
         self.X_SO2      = 0.0
         self.X_S2       = 0.0
         
+        self.auto_normalize_X  = False   # default; set True via config or at runtime
+        self._norm_warned_once = False  # to avoid spamming messages
+        
         # ------------------------------
         # Region A: bolometric (non-dissociated) mean molecular weights
         # ------------------------------
@@ -124,8 +127,11 @@ class ModelParams:
                 self.X_N2, self.X_NH3, self.X_H2S, self.X_SO2, self.X_S2)
 
     def _check_X_sum(self, tol=1e-8):
-        s = sum(self.get_X_tuple())
+        s = self._sum_X()
         if abs(s - 1.0) > tol:
+            if self.auto_normalize_X:
+                self._normalize_X_inplace()
+                return
             raise ValueError(f"X fractions must sum to 1 (got {s:.5f}).")
 
     def update_param(self, key, value):
@@ -193,6 +199,22 @@ class ModelParams:
         if X_S2  > 0: chi += self.sigma_XUV['S'] * X_S2  / (self.mmw_S2_outflow  * self.m_H) * 1.0     # 2/2
 
         return chi # cm^2 g^-1
+    
+    def set_sigma_XUV(self, mapping: dict):
+        """Override atomic sigma_XUV (cm^2). Keys case-insensitive among H,C,N,O,S."""
+        for k, v in mapping.items():
+            key = k.upper()
+            if key not in self.sigma_XUV:
+                raise KeyError(f"Unknown sigma_XUV species '{k}'. Valid: {list(self.sigma_XUV)}")
+            self.sigma_XUV[key] = float(v)
+
+    def set_kappa(self, mapping: dict):
+        """Override IR κ (cm^2 g^-1) per molecule."""
+        for mol, val in mapping.items():
+            if mol not in self.kappa:
+                raise KeyError(f"Unknown κ species '{mol}'. Valid: {list(self.kappa)}")
+            self.kappa[mol] = float(val)
+        self._init_opacities()
 
     # --- mu (bolometric) & reservoir bookkeeping ---
     def _recompute_composites(self):
@@ -324,16 +346,19 @@ class ModelParams:
         except Exception:
             raise NotImplementedError(f"No diffusion coefficient for pair {a}-{b}. Add it to diffusion_fits or implement b_{a}{b}.")
 
-        
+    # --- others ---   
     # to properly read the configs/*.toml files
     def set_composition(self, mapping: dict, auto_normalize: bool = True):
         """
         Set all mass fractions X_* in one shot.
-
         mapping keys: H2, H2O, O2, CO2, CO, CH4, N2, NH3, H2S, SO2, S2
         Unspecified species default to 0.0.
         If auto_normalize=True, values are rescaled to sum to 1.
+        If auto_normalize is None, use self.auto_normalize_X.
         """
+        if auto_normalize is None:
+            auto_normalize = self.auto_normalize_X
+        
         allowed = ["H2","H2O","O2","CO2","CO","CH4","N2","NH3","H2S","SO2","S2"]
 
         # collect values, defaulting missing ones to 0
@@ -357,23 +382,29 @@ class ModelParams:
         self._recompute_composites()
         self._init_opacities()
         self.mmw_outflow_eff = None
+            
+    # to normalize mass fractions automatically whenever they don’t sum to 1
+    def _sum_X(self):
+        return sum(self.get_X_tuple())
 
-    def set_sigma_XUV(self, mapping: dict):
-        """Override atomic sigma_XUV (cm^2). Keys case-insensitive among H,C,N,O,S."""
-        for k, v in mapping.items():
-            key = k.upper()
-            if key not in self.sigma_XUV:
-                raise KeyError(f"Unknown sigma_XUV species '{k}'. Valid: {list(self.sigma_XUV)}")
-            self.sigma_XUV[key] = float(v)
+    def _normalize_X_inplace(self):
+        s = self._sum_X()
+        if s <= 0.0:
+            raise ValueError("All composition mass fractions are zero; cannot normalize.")
+        scale = 1.0 / s
+        (self.X_H2, self.X_H2O, self.X_O2, self.X_CO2, self.X_CO, self.X_CH4,
+        self.X_N2, self.X_NH3, self.X_H2S, self.X_SO2, self.X_S2) = [
+            x * scale for x in self.get_X_tuple()
+        ]
+        if not self._norm_warned_once:
+            print(f"[composition] Auto-normalized mass fractions (sum={s:.6f} → 1.0).")
+            self._norm_warned_once = True
 
-    def set_kappa(self, mapping: dict):
-        """Override IR κ (cm^2 g^-1) per molecule."""
-        for mol, val in mapping.items():
-            if mol not in self.kappa:
-                raise KeyError(f"Unknown κ species '{mol}'. Valid: {list(self.kappa)}")
-            self.kappa[mol] = float(val)
-        self._init_opacities()
+    def enable_auto_normalize(self, flag: bool = True):
+        """Enable/disable auto-normalization for X_* when their sum != 1."""
+        self.auto_normalize_X = bool(flag)
 
+    # 
     def set_diffusion_fits(self, mapping: dict):
         """
         mapping: {"HO": {"A":..., "gamma":...}, "H-O": {...}, ...}
