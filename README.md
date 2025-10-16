@@ -31,21 +31,21 @@ pip install "boreas @ git+https://github.com/ExoInteriors/BOREAS.git@proteus#"
 ### Examples live in examples/configs/. Use the runner:
 
 ```bash
-# default example (k2-18b.toml)
+# default example (my_planet.toml)
 python examples/run_single_planet.py
 
 # explicit config (relative or absolute path)
-python examples/run_single_planet.py --config examples/configs/k2-18b.toml
+python examples/run_single_planet.py --config examples/configs/my_planet.toml
 
 # extra prints
-python examples/run_single_planet.py -v -c examples/configs/k2-18b.toml
+python examples/run_single_planet.py -v -c examples/configs/my_planet.toml
 ```
 
 ### Typical output
 
 ```bash
-Config: /.../examples/configs/k2-18b.toml
-Planet: K2-18 b
+Config: /.../examples/configs/my_planet.toml
+Planet: my_planet
 Regime: EL  RXUV[cm]: 1.23e+09  Mdot[g/s]: 4.56e+08
 light_major: H  heavy_major: O
 T_outflow[K]: 10000.0  mu_outflow: 1.02
@@ -58,14 +58,14 @@ T_outflow[K]: 10000.0  mu_outflow: 1.02
 
 1. Copy an example file:
 ```bash
-cp examples/configs/k2-18b.toml myplanet.toml
+cp examples/configs/my_planet.toml my_other_planet.toml
 ```
-2. Edit myplanet.toml (see the full schema below).
+2. Edit my_planet.toml (see the full schema below).
 3. Run it:
 ```bash
-python examples/run_single_planet.py --config myplanet.toml
+python examples/run_single_planet.py --config my_other_planet.toml
 # OR
-python examples/run_single_planet.py -v -c myplanet.toml
+python examples/run_single_planet.py -v -c my_other_planet.toml
 ```
 
 ## Saving results
@@ -74,10 +74,10 @@ python examples/run_single_planet.py -v -c myplanet.toml
 
 ```bash
 # JSON (full structure)
-python examples/run_single_planet.py -c examples/configs/k2-18b.toml --json out/k2_18b_results.json
+python examples/run_single_planet.py -c examples/configs/my_planet.toml --json out/my_planet_results.json
 
 # CSV (compact table of key outputs)
-python examples/run_single_planet.py -c examples/configs/k2-18b.toml --csv  out/k2_18b_summary.csv
+python examples/run_single_planet.py -c examples/configs/my_planet.toml --csv  out/my_planet_summary.csv
 ```
 
 ## Config file schema (TOML)
@@ -85,8 +85,8 @@ python examples/run_single_planet.py -c examples/configs/k2-18b.toml --csv  out/
 ### A config describes one planet and the physics knobs. Example:
 ```bash
 [planet]
-name           = "K2-18 b"      # use packaged properties (mass, radius, Teq)
-FXUV_erg_cm2_s = "from_data"    # or a number (stellar irradiance at orbit; cm^-2 s^-1 * erg)
+name           = "my_planet"   # use packaged properties (mass, radius, Teq)
+FXUV_erg_cm2_s = "from_data"   # or a number (stellar irradiance at orbit; cm^-2 s^-1 * erg)
 
 [composition]                  # MASS fractions (sum≈1). Auto-normalized if enabled
 H2  = 0.90
@@ -189,6 +189,7 @@ BOREAS/
 │  └─ examples/configs/         # (optional) ship example TOMLs here if desired
 ├─ examples/
 │  ├─ configs/k2-18b.toml
+│  ├─ configs/my_planet.toml
 │  └─ run_single_planet.py
 ├─ tests/
 │  └─ test_fractionation_units.py
