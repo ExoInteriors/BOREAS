@@ -11,5 +11,6 @@
     "TRAPPIST-1 f": {"radius": 1.045, "mass": 1.039, "teq": 217.7, "FXUV": 263.598},
     "TRAPPIST-1 g": {"radius": 1.129, "mass": 1.321, "teq": 197.3, "FXUV": 178.116},
     "TRAPPIST-1 h": {"radius": 0.756, "mass": 0.326, "teq": 171.7, "FXUV": 102.035},
-    "HD 63433 c" : {"radius": 2.720, "mass": 15.323, "teq": 600, "FXUV": 6000}
+    "HD 63433 c": {"radius": 2.720, "mass": 15.323, "teq": 600, "FXUV": 6000},
+    "my-planet": {"radius": 1.5, "mass": 2.0, "teq": 1500, "FXUV": 25}
 }
