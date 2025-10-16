@@ -1,19 +1,19 @@
 [planet]
-name           = "my_planet"     # look up mass/radius/Teq in packaged data
-FXUV_erg_cm2_s = "from_data"     # incident XUV (energy flux), or stellar irradiance at the planet’s orbit
+name           = "my_planet"     # look up mass(grams)/radius(cm)/Teq(K) in packaged data.
+FXUV_erg_cm2_s = "from_data"     # "from_data" to read .json value, or input value. Incident XUV (energy flux), or stellar irradiance at the planet’s orbit, ergs cm-2 s-1
 
-[composition]                    # mass fractions (sum≈1); auto-normalized if enabled below
-H2  = 0.90
+[composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
+H2  = 0.10
 H2O = 0.10
-O2  = 0.0
-CO2 = 0.0
-CO  = 0.0
-CH4 = 0.0
-N2  = 0.0
-NH3 = 0.0
-H2S = 0.0
-SO2 = 0.0
-S2  = 0.0
+O2  = 0.1
+CO2 = 0.1
+CO  = 0.1
+CH4 = 0.1
+N2  = 0.1
+NH3 = 0.1
+H2S = 0.1
+SO2 = 0.05
+S2  = 0.05
 
 [physics]
 efficiency = 0.30                 # mass loss efficiency eta (η), dimensionless

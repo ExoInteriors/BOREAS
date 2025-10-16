@@ -1,8 +1,8 @@
 [planet]
-name           = "K2-18 b"       # look up mass/radius/Teq in packaged data
-FXUV_erg_cm2_s = "from_data"     # incident XUV (energy flux), or stellar irradiance at the planet’s orbit
+name           = "K2-18b"     # look up mass(grams)/radius(cm)/Teq(K) in packaged data.
+FXUV_erg_cm2_s = "from_data"     # "from_data" to read .json value, or input value. Incident XUV (energy flux), or stellar irradiance at the planet’s orbit, ergs cm-2 s-1
 
-[composition]                    # mass fractions (sum≈1); auto-normalized if enabled below
+[composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
 H2  = 0.929
 H2O = 0.050
 O2  = 0.0
