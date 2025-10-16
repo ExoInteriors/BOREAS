@@ -1,16 +1,16 @@
 [planet]
-name           = "K2-18 b"       # look up mass/radius/Teq in packaged data
+name           = "my_planet"     # look up mass/radius/Teq in packaged data
 FXUV_erg_cm2_s = "from_data"     # incident XUV (energy flux), or stellar irradiance at the planet’s orbit
 
 [composition]                    # mass fractions (sum≈1); auto-normalized if enabled below
-H2  = 0.929
-H2O = 0.050
+H2  = 0.90
+H2O = 0.10
 O2  = 0.0
-CO2 = 0.010
+CO2 = 0.0
 CO  = 0.0
-CH4 = 0.010
+CH4 = 0.0
 N2  = 0.0
-NH3 = 0.001
+NH3 = 0.0
 H2S = 0.0
 SO2 = 0.0
 S2  = 0.0
