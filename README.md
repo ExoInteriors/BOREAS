@@ -37,7 +37,7 @@ python examples/run_single_planet.py
 # explicit config (relative or absolute path)
 python examples/run_single_planet.py --config examples/configs/my_planet.toml
 
-# extra prints
+# extra prints, including input params such as mass, radius, Teq, FXUV
 python examples/run_single_planet.py -v -c examples/configs/my_planet.toml
 ```
 
