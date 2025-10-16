@@ -116,6 +116,12 @@ class ModelParams:
         }
         
         self._warned_pairs = set()
+        
+        #TODO: if r0 is added (mesopause, base of the outflow, different from RXUV)
+        #  # misc fractionation params
+        # self.r0_base = None                 # if None, treat r0 ≡ RXUV for now
+        # self.fractionation_T_mode = "base"  # "base" | "from_cs" | "fixed"
+        # self.fractionation_T_fixed = None
                 
     # =================================================
     # Basic helpers

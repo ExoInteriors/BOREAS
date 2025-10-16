@@ -53,6 +53,10 @@ class FractionationPhysics:
         if allow_dynamic_light_major:
             # lightest species by mass, with non-negligible abundance (use mass_order or mass_g; both give same ordering)
             candidates = [s for s in ('H','C','N','O','S') if N[s] > eps]
+            #TODO: decide j based on abundance, not weight
+            # candidates = [(s, f[s]) for s in ('C','N','O','S') if s!=i and mass_g[s]>mass_g[i] and f[s]>eps]
+            # j = max(candidates, key=lambda t: t[1])[0] if candidates else None
+            
             if not candidates:
                 raise ValueError("No atomic species present at the XUV base.")
             i = min(candidates, key=lambda s: mass_g[s])
@@ -78,7 +82,7 @@ class FractionationPhysics:
                 continue
             # need b_{i,s}(T)
             b_ij = p.b_pair(i, s, T_outflow)
-            # IMPORTANT: use GRAM masses in Fcrit, not amu
+            # IMPORTANT: use gram masses in Fcrit, not amu
             Fcrit = g * (mass_g[s] - mass_g[i]) * b_ij / (p.k_b * T_outflow * (1.0 + f[s]))
 
             if (best is None) or (Fcrit > best[2]):
@@ -94,7 +98,7 @@ class FractionationPhysics:
 class GeneralizedFractionation:
     """
     Odert2018-style fractionation generalized to a dynamic light major i and heavy major j.
-    Species considered: H, C, N, O, S (extendable).
+    Species considered: H, C, N, O, S.
     All phi_* returned are NUMBER fluxes.
     """
     def __init__(self, params):
@@ -134,6 +138,15 @@ class GeneralizedFractionation:
 
         # fixed-point loop on x's
         g = self.G * m_planet / (RXUV**2)
+        
+        #TODO: add new r0 (mesopause, base of the outflow, Rp<r0<RXUV)
+        # r0 = getattr(self.p, "r0_base", None) or RXUV
+        # g  = self.G * m_planet / (r0**2)
+        # # choose T for diffusion coefficients
+        # mode_f = getattr(self.p, "fractionation_T_mode", "base")
+        # T_outflow = (float(T_outflow) if mode_f=="from_cs"
+        #     else (float(self.p.fractionation_T_fixed) if mode_f=="fixed" and self.p.fractionation_T_fixed
+        #         else float(Teq)))
 
         for _ in range(max_iter):
             # effective grams per escaping i-particle in denominator
@@ -145,14 +158,7 @@ class GeneralizedFractionation:
             if j is not None:
                 b_ij = p.b_pair(i, j, T_outflow)
                 xj_new = 1.0 - ( g * (m[j]-m[i]) * b_ij ) / ( max(Fi,1e-300) * self.kB * T_outflow * (1.0 + f[j]) )
-                
-                # if xj_new <= 0.0:
-                #     # diffusion-limited branch against j
-                #     Fcrit = g * (m[j]-m[i]) * b_ij / ( self.kB * T_outflow * (1.0 + f[j]) )
-                #     phi = {s: 0.0 for s in species}
-                #     phi[i] = Fcrit
-                #     return {'i': i, 'j': j, 'phi': phi, 'x': {s:(0.0 if s!=i else 1.0) for s in species},
-                #             'f': f, 'mode': 'diffusion-limited'}
+
                 if xj_new <= 0.0:
                     # Heavy major j stalls. The actual i-flux is the MIN of EL supply and diffusion limit.
                     Fcrit  = g * (m[j]-m[i]) * b_ij / ( self.kB * T_outflow * (1.0 + f[j]) )  # cm^-2 s^-1
@@ -234,7 +240,6 @@ class Fractionation:
         self.general = GeneralizedFractionation(params)
 
     def execute(self, mass_loss_results, mass_loss, tol=1e-5, max_iter=100, allow_dynamic_light_major=True, forced_light_major='H', debug=False):
-        
         out = []
         for sol in mass_loss_results:
             Mp, Rp, Teq = sol['m_planet'], sol['r_planet'], sol['Teq']
@@ -258,7 +263,7 @@ class Fractionation:
                 T_out_EL = self.phys.T_outflow_from_cs(cs_EL, mu_eff)
                 i_guess, j_guess, _ = FractionationPhysics.choose_light_and_heavy_major(self.params, RXUV_EL, T_out_EL, Mp)
 
-                # 3) if i==H and EL says RL regime, recompute hydro once in RL. Else keep EL.
+                # 3) if i==H and EL says RL regime, recompute hydro once in RL. else keep EL.
                 if (i_guess == 'H') and (t_ratio_EL < 1.0):
                     hydro = mass_loss.compute_mass_loss_parameters(np.array([Mp]), np.array([Rp]), np.array([Teq]), rl_policy='if_H', light_major='H')[0]
                 else:
@@ -266,7 +271,7 @@ class Fractionation:
 
                 RXUV, cs, Mdot = hydro['RXUV'], hydro['cs'], hydro['Mdot']
     
-                Fmass = Mdot / (4.0*np.pi*RXUV**2) # g cm^-2 s^-1
+                Fmass = Mdot / (4.0*np.pi*RXUV**2) # mass flux, g cm^-2 s^-1
                 
                 # 3.5 RL/H temperature override just for fractionation physics
                 # Find the current light-major i (independent of T, so a provisional T is fine):
@@ -304,12 +309,9 @@ class Fractionation:
             # fallbacks if (pathologically) final_res is None
             if final_res is None:
                 # Single-shot; run once to populate fields
-                Fmass = Mdot / (4.0 * np.pi * RXUV**2)
-                final_res = self.general.compute_fluxes(
-                    Fmass, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp,
-                    allow_dynamic_light_major=allow_dynamic_light_major,
-                    forced_light_major=forced_light_major
-                )
+                Fmass = Mdot / (4.0 * np.pi * RXUV**2) # mass flux
+                final_res = self.general.compute_fluxes(Fmass, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp,
+                    allow_dynamic_light_major=allow_dynamic_light_major, forced_light_major=forced_light_major)
 
             phi = final_res['phi']
             x   = final_res['x']
@@ -319,7 +321,8 @@ class Fractionation:
             final_hydro.update({
                 # number fluxes:
                 'phi_H_num': phi.get('H',0.0), 'phi_O_num': phi.get('O',0.0),
-                'phi_C_num': phi.get('C',0.0), 'phi_N_num': phi.get('N',0.0), 'phi_S_num': phi.get('S',0.0),
+                'phi_C_num': phi.get('C',0.0), 'phi_N_num': phi.get('N',0.0),
+                'phi_S_num': phi.get('S',0.0),
                 # entrainment x and base ratios f:
                 'x_O': x.get('O', 1.0), 'x_C': x.get('C', 1.0), 'x_N': x.get('N', 1.0), 'x_S': x.get('S', 1.0),
                 'f_O': f['O'], 'f_C': f['C'], 'f_N': f['N'], 'f_S': f['S'],
