@@ -54,15 +54,15 @@ def main(cfg_path: Path, verbose: bool = False):
 
     # --- report ---
     r0 = f_results[0]
-    print(f"\n Config: {cfg_path}")
+    print("Done!")
+    print(f"Config: {cfg_path}")
     print("Planet:", fx_args["planet_name"])
-    print("Regime:", r0.get("regime"),
-          "RXUV[cm]:", r0.get("RXUV"),
-          "Mdot[g/s]:", r0.get("Mdot"))
-    print("light_major:", r0.get("light_major_i"),
-          "heavy_major:", r0.get("heavy_major_j"))
-    print("T_outflow[K]:", r0.get("T_outflow"),
-          "mu_outflow:", r0.get("mmw_outflow"))
+    print("Regime:", r0.get("regime"), ", RXUV[cm]:", r0.get("RXUV"), ", Mdot[g/s]:", r0.get("Mdot"))
+    print("light_major:", r0.get("light_major_i"), ", heavy_major:", r0.get("heavy_major_j"))
+    print("T_outflow[K]:", r0.get("T_outflow"), ", mu_outflow:", r0.get("mmw_outflow"))
+    print("phi_H_num:", r0.get("phi_H_num"), ", phi_O_num", r0.get("phi_O_num"), ", phi_C_num",  r0.get("phi_C_num"), ", phi_N_num",  r0.get("phi_N_num"), ", phi_S_num",  r0.get("phi_S_num"))
+    print("x_O", r0.get("x_O"), ", x_C", r0.get("x_C"), ", x_N", r0.get("x_N"), ", x_S", r0.get("x_S"))
+    
 
 if __name__ == "__main__":
     args = parse_args()
