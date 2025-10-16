@@ -8,7 +8,7 @@ from boreas import ModelParams, MassLoss, Fractionation
 from boreas.config import apply_params_from_config, build_inputs_from_config, fractionation_runtime_args
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_CFG = HERE / "configs" / "k2-18b.toml" # <- default lives next to this script
+DEFAULT_CFG = HERE / "configs" / "my_planet.toml" # <- default lives next to this script
 
 def parse_args():
     ap = argparse.ArgumentParser(description="Run BOREAS for a single TOML config.")
