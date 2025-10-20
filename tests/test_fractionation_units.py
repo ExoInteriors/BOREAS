@@ -9,20 +9,20 @@ from boreas.fractionation import FractionationPhysics, GeneralizedFractionation
 
 # verifies:
 # - diffusion coefficients (b_ij):
-#     • symmetry check: b_ij(T) == b_ji(T)
-#     • magnitude sanity: b_HO(T=1e4 K) ~ 1e20–1e21 cm^-1 s^-1 (detects unit typos)
+#     - symmetry check: b_ij(T) == b_ji(T)
+#     - magnitude sanity: b_HO(T=1e4 K) ~ 1e20–1e21 cm^-1 s^-1 (detects unit typos)
 # - diffusion-limited regime:
-#     • heavy major j stalls → φ_i ≈ F_crit = g(m_j−m_i)b_ij / [k_B T (1+f_j)]
-#     • confirms correct unit usage (grams, k_B in erg/K, etc.)
+#     - heavy major j stalls → φ_i ≈ F_crit = g(m_j−m_i)b_ij / [k_B T (1+f_j)]
+#     - confirms correct unit usage (grams, k_B in erg/K, etc.)
 # - energy-limited (j-stalled) regime:
-#     • small mass flux → φ_i = F_mass / m_i (Fi_EL supply)
-#     • verifies consistent mass–flux conversion
+#     - small mass flux → φ_i = F_mass / m_i (Fi_EL supply)
+#     - verifies consistent mass–flux conversion
 # - entrainment fractions x_s:
-#     • all x_s within [0,1] for moderate flux
-#     • indirectly confirms x-update equations are dimensionless and clamped
+#     - all x_s within [0,1] for moderate flux
+#     - indirectly confirms x-update equations are dimensionless and clamped
 # overall:
-#     • protects against unit errors (amu↔grams)
-#     • ensures correct regime branching and physical bounds in fractionation core
+#     - protects against unit errors (amu↔grams)
+#     - ensures correct regime branching and physical bounds in fractionation core
 
 
 def _params_H2_H2O():
@@ -75,7 +75,7 @@ def test_diffusion_limited_branch_matches_Fcrit():
     denom0 = m[i]["m"] + sum(m[s]["m"] * f[s] for s in f if s != i)
 
     # Pick Fmass so that: m_i*Fcrit < Fmass < denom0*Fcrit
-    eps = 0.05  # 5% above the lower bound; requires denom0/m_i > 1.05 (true here)
+    eps = 0.05 # 5% above the lower bound; requires denom0/m_i > 1.05 (true here)
     assert denom0 > (1.0 + eps) * m[i]["m"]
     Fmass = (1.0 + eps) * m[i]["m"] * Fcrit
 
@@ -109,7 +109,7 @@ def test_energy_limited_j_stalled_branch_matches_FiEL():
     Fcrit = g * (m[j]["m"] - m[i]["m"]) * b_ij / (p.k_b * T * (1.0 + f[j]))
 
     # Pick Fmass so that EL supply is below the diffusion cap
-    Fmass = 0.90 * m[i]["m"] * Fcrit  # => Fi_EL = 0.90*Fcrit
+    Fmass = 0.90 * m[i]["m"] * Fcrit # => Fi_EL = 0.90*Fcrit
 
     res = gen.compute_fluxes(Fmass, RXUV, T, M)
 
@@ -131,7 +131,7 @@ def test_x_updates_dimensionless_and_bounded():
     RXUV = 1.2 * R
     T = 1.0e4
 
-    Fmass = 1e-9  # g cm^-2 s^-1 (moderate)
+    Fmass = 1e-9 # g cm^-2 s^-1 (moderate)
     res = gen.compute_fluxes(Fmass, RXUV, T, M)
 
     for s, x in res["x"].items():

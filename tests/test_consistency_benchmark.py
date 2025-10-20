@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 
 from boreas import ModelParams, MassLoss, Fractionation
+from boreas.fractionation import FractionationPhysics
+
 from boreas.config import (
     load_config_toml,
     apply_params_from_config,
@@ -34,32 +36,7 @@ def approx_rel(a, b, rtol=1e-6, atol=0.0):
     return math.isclose(a, b, rel_tol=rtol, abs_tol=atol)
 
 def atomic_counts_from_X(p):
-    """Reproduce the f-ratios check from your FractionationPhysics.atomic_counts_from_X."""
-    (X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2) = p.get_X_tuple()
-
-    def part(X, mmw):
-        return X / mmw if X > 0 else 0.0
-
-    N_H2  = part(X_H2,  p.mmw_H2_outflow)
-    N_H2O = part(X_H2O, p.mmw_H2O_outflow)
-    N_O2  = part(X_O2,  p.mmw_O2_outflow)
-    N_CO2 = part(X_CO2, p.mmw_CO2_outflow)
-    N_CO  = part(X_CO,  p.mmw_CO_outflow)
-    N_CH4 = part(X_CH4, p.mmw_CH4_outflow)
-    N_N2  = part(X_N2,  p.mmw_N2_outflow)
-    N_NH3 = part(X_NH3, p.mmw_NH3_outflow)
-    N_H2S = part(X_H2S, p.mmw_H2S_outflow)
-    N_SO2 = part(X_SO2, p.mmw_SO2_outflow)
-    N_S2  = part(X_S2,  p.mmw_S2_outflow)
-
-    N = dict(
-        H = 2*N_H2 + 2*N_H2O + 4*N_CH4 + 3*N_NH3 + 2*N_H2S,
-        O = 1*N_H2O + 2*N_O2  + 2*N_CO2 + 1*N_CO  + 2*N_SO2,
-        C = 1*N_CO2 + 1*N_CO  + 1*N_CH4,
-        N = 2*N_N2  + 1*N_NH3,
-        S = 1*N_H2S + 1*N_SO2 + 2*N_S2,
-    )
-    return N
+    return FractionationPhysics.atomic_counts_from_X(p)
 
 # --- tests -----------------------------------------------------------------
 
@@ -124,7 +101,7 @@ def test_pipeline_consistency(cfg_path: Path):
     f_expected = {s: (N[s] / Ni) for s in "HCNOS"}
     # reported f_*
     f_reported = {
-        "H": 1.0,  # by definition relative to i (if i==H this equals 1; if i!=H this is N_H/N_i)
+        "H": 1.0, # by definition relative to i (if i==H this equals 1; if i!=H this is N_H/N_i)
         "C": float(r0["f_C"]),
         "N": float(r0["f_N"]),
         "O": float(r0["f_O"]),
@@ -136,7 +113,7 @@ def test_pipeline_consistency(cfg_path: Path):
         assert approx_rel(f_reported.get("H", 1.0), f_expected["H"], rtol=1e-6, atol=0.0)
 
     for s in ("C", "N", "O", "S"):
-        # If a species is truly absent, f_expected could be 0; accept tiny absolute error there.
+        # if a species is truly absent, f_expected could be 0; accept tiny absolute error there.
         if f_expected[s] == 0.0:
             assert abs(f_reported[s]) < 1e-12
         else:
@@ -162,9 +139,9 @@ def test_pipeline_consistency(cfg_path: Path):
 
     # 7) regime conventions
     if r0["regime"] == "RL":
-        # You pin T_outflow ~ 1e4 K in RL
+        # pin T_outflow ~ 1e4 K in RL
         assert math.isclose(float(r0["T_outflow"]), 1.0e4, rel_tol=0.05, abs_tol=0.0)
-        # And your hydro uses cs ~ 1.2e6 cm/s in RL closure
+        # and hydro uses cs ~ 1.2e6 cm/s in RL closure
         assert math.isclose(float(r0["cs"]), 1.2e6, rel_tol=0.05, abs_tol=0.0)
 
     # 8) non-negativity of number fluxes
