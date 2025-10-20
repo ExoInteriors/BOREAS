@@ -7,7 +7,8 @@ including **energy-limited (EL)** and **recombination-limited (RL)** regimes wit
 The code couples a **molecular bolometric (IR) region** to a **fully dissociated atomic outflow**,  
 tracking composition-dependent escape and diffusive separation self-consistently.
 
-> **Package name:** boreas · **Import name:** boreas
+> **Package name:** boreas
+> **Import name:** boreas
 > **Requires:** Python ≥ 3.9
 > **Author:** M. Valatsou (2025)
 
