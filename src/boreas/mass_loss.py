@@ -8,6 +8,9 @@ class MomentumBalanceError(RuntimeError):
         self.min_abs_f = min_abs_f
         self.R_best = R_best
         self.R_over_Rp = R_over_Rp
+    
+    # TODO: add function that takes the closest possible root for RXUV if momentum balance is not satisfied
+    # TODO: as long as it is smaller than a set tolerance
 
 class MassLoss:
     def __init__(self, params):
@@ -54,7 +57,10 @@ class MassLoss:
 
         # integrate Parker wind to get tau geometrically
         rho_shape = (RS_flow / r)**2 * (cs / u)                     # dimensionless (from continuity rho u r^2 = const). captures how density falls with r, independent of units
-        tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))            # geometric column, cm
+        tau = np.abs(np.trapezoid(rho_shape[::-1], r[::-1]))        # geometric column, cm
+        # OR
+        # from scipy.integrate import trapezoid
+        # tau = np.abs(trapezoid(rho_shape[::-1], r[::-1]))
         
         # mass absorption coefficient at XUV for mixtures
         chi_xuv = self.params.xuv_cross_section_per_mass()          # mass absorption coefficient at XUV for mixtures
@@ -298,6 +304,7 @@ class MassLoss:
 
                 # photo layer
                 mu_bolo    = self.params.get_mmw_bolometric()
+                # FIXME: should it be cs_bolo = np.sqrt(k_b * T_eq / (mu_bolo))?
                 cs_bolo    = np.sqrt(k_b * T_eq / (m_H * mu_bolo))          # always calculated with bolometric mu 
                 kappa_bolo = self.params.kappa_p_all
                 # kappa_bolo = np.clip(self.params.kappa_p_all, 1e-3, 10.0) # tune bounds
