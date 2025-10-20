@@ -7,6 +7,24 @@ import pytest
 from boreas.parameters import ModelParams
 from boreas.fractionation import FractionationPhysics, GeneralizedFractionation
 
+# verifies:
+# - diffusion coefficients (b_ij):
+#     • symmetry check: b_ij(T) == b_ji(T)
+#     • magnitude sanity: b_HO(T=1e4 K) ~ 1e20–1e21 cm^-1 s^-1 (detects unit typos)
+# - diffusion-limited regime:
+#     • heavy major j stalls → φ_i ≈ F_crit = g(m_j−m_i)b_ij / [k_B T (1+f_j)]
+#     • confirms correct unit usage (grams, k_B in erg/K, etc.)
+# - energy-limited (j-stalled) regime:
+#     • small mass flux → φ_i = F_mass / m_i (Fi_EL supply)
+#     • verifies consistent mass–flux conversion
+# - entrainment fractions x_s:
+#     • all x_s within [0,1] for moderate flux
+#     • indirectly confirms x-update equations are dimensionless and clamped
+# overall:
+#     • protects against unit errors (amu↔grams)
+#     • ensures correct regime branching and physical bounds in fractionation core
+
+
 def _params_H2_H2O():
     p = ModelParams()
     # 90% H2, 10% H2O by mass (no auto-normalize so it's exact)
