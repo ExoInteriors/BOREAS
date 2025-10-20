@@ -40,23 +40,28 @@ class FractionationPhysics:
         return N
 
     @staticmethod
-    def choose_light_and_heavy_major(p, RXUV, T_outflow, m_planet, allow_dynamic_light_major=True, forced_light_major='H', eps=1e-20):
-        """Pick (i, j) given current base composition and outflow T."""
+    def choose_light_and_heavy_major(p, RXUV, T_outflow, m_planet, allow_dynamic_light_major=True, forced_light_major='H', eps=1e-20, tol_major=0.1):
+        """
+        Pick (i, j) given current base composition and outflow T.
+        
+        Strategy:
+        - i: lightest species with non-negligible abundance (by atomic count).
+        - j: among species heavier than i, choose the one with the largest mixing
+           ratio f_j = N_j/N_i (dominant heavy). If multiple are within
+           tol_major of the top f_j, break ties by the smallest Fcrit
+           (stronger coupling; easier to drag, takes Δm and b_i into account).
+        """
+
         # atomic inventories (fully dissociated, per bulk mass)
         N = FractionationPhysics.atomic_counts_from_X(p)
 
-        # ---- masses ----
-        # Use GRAMS for all physics below (F_crit etc.)
+        # masses in grams for all physics below (F_crit etc.)
         mass_g = {"H": p.m_H, "C": p.m_C, "N": p.m_N, "O": p.m_O, "S": p.m_S}
         
         # ---- pick light major i ----
         if allow_dynamic_light_major:
             # lightest species by mass, with non-negligible abundance (use mass_order or mass_g; both give same ordering)
             candidates = [s for s in ('H','C','N','O','S') if N[s] > eps]
-            #TODO: decide j based on abundance, not weight
-            # candidates = [(s, f[s]) for s in ('C','N','O','S') if s!=i and mass_g[s]>mass_g[i] and f[s]>eps]
-            # j = max(candidates, key=lambda t: t[1])[0] if candidates else None
-            
             if not candidates:
                 raise ValueError("No atomic species present at the XUV base.")
             i = min(candidates, key=lambda s: mass_g[s])
@@ -66,33 +71,36 @@ class FractionationPhysics:
                 raise ValueError(f"Forced light major {i} absent at base (N_{i}≈0).")
 
         # ---- base mixing ratios relative to i ---- 
-        # build mixing ratios f_s = N_s / N_i
-        f = {s: (N[s]/max(N[i], eps)) for s in N.keys()}
+        Ni = max(N[i], eps)
+        f  = {s: (N[s]/Ni) for s in ('H','C','N','O','S')}
 
-        # ---- choose heavy major j among heavier species present ----
-        # among heavier species (m_j > m_i) with f_j>0, choose j maximizing F_i,crit^(j)
+        # ---- choose heavy major j: abundance-first, physics tie-breaker ----
         g = p.G * m_planet / (RXUV**2)
-        best = None
-        for s in ('H','C','N','O','S'):
+    
+        # collect heavier-than-i candidates with their f_j and Fcrit(i↔j)
+        cand = []
+        for s in ('C','N','O','S','H'): # order irrelevant; H will be skipped if i=H
             if s == i:
                 continue
-            if mass_g[s] <= mass_g[i]: # compare in grams
+            if mass_g[s] <= mass_g[i]:
                 continue
             if f[s] <= eps:
                 continue
-            # need b_{i,s}(T)
-            b_ij = p.b_pair(i, s, T_outflow)
-            # IMPORTANT: use gram masses in Fcrit, not amu
+            b_ij  = p.b_pair(i, s, T_outflow)
             Fcrit = g * (mass_g[s] - mass_g[i]) * b_ij / (p.k_b * T_outflow * (1.0 + f[s]))
+            cand.append({'s': s, 'f': f[s], 'Fcrit': Fcrit})
 
-            if (best is None) or (Fcrit > best[2]):
-                best = (s, b_ij, Fcrit)
-                
-        if best is None:
-            # no heavier species with significant f: no heavy major
-            j = None
-        else:
-            j = best[0]
+        if not cand:
+            return i, None, f
+        
+        # primary criterion: largest f_j
+        fmax = max(c['f'] for c in cand)
+        # keep those within tol_major of fmax
+        near = [c for c in cand if c['f'] >= (1.0 - tol_major) * fmax]
+
+        # tie-breaker: choose the one with *smallest* Fcrit (stronger coupling)
+        j = min(near, key=lambda c: c['Fcrit'])['s']
+    
         return i, j, f
 
 class GeneralizedFractionation:
