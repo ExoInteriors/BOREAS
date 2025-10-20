@@ -3,7 +3,7 @@ requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
 [project]
-name = "boreas-proteus"
+name = "boreas"
 version = "0.1.0"
 description = "Hydrodynamic mass loss with multi-species fractionation."
 readme = "README.md"
@@ -18,7 +18,6 @@ Issues   = "https://github.com/ExoInteriors/BOREAS/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/boreas"]
-include = ["src/boreas/data/planet_params.json", "README.md",]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/boreas/**", "README.md",]
+include = ["src/boreas/**", "README.md"]
