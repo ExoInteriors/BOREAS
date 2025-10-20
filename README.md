@@ -88,66 +88,65 @@ python examples/run_single_planet.py -c examples/configs/my_planet.toml --csv  o
 name           = "my_planet"   # use packaged properties (mass, radius, Teq)
 FXUV_erg_cm2_s = "from_data"   # or a number (stellar irradiance at orbit; cm^-2 s^-1 * erg)
 
-[composition]                  # MASS fractions (sum≈1). Auto-normalized if enabled
-H2  = 0.90
+[composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
+H2  = 0.10
 H2O = 0.10
-O2  = 0.0
-CO2 = 0.0
-CO  = 0.0
-CH4 = 0.0
-N2  = 0.0
-NH3 = 0.0
-H2S = 0.0
-SO2 = 0.0
-S2  = 0.0
+O2  = 0.1
+CO2 = 0.1
+CO  = 0.1
+CH4 = 0.1
+N2  = 0.1
+NH3 = 0.1
+H2S = 0.1
+SO2 = 0.05
+S2  = 0.05
 
 [physics]
-efficiency = 0.30               # η in the EL closure (dimensionless)
+efficiency = 0.30                 # mass loss efficiency eta (η), dimensionless
 albedo     = 0.30
-beta       = 0.75               # dayside redistribution factor (unused in core solver)
+beta       = 0.75                 # dayside redistribution factor, 0.5<b<1
 emissivity = 1.0
 
-[xuv.sigma_cm2]                 # Atomic XUV cross-sections for the DISSOCIATED outflow (cm^2)
-H = 1.89e-18
-O = 2.00e-18
-C = 2.50e-18
-N = 3.00e-18
-S = 6.00e-18
+[xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow
+H = 1.89e-18                      # representative neutral-atom σ at ~25 eV, sigma(E) ≈ sigma(25 eV) * (E / 25 eV)^(-3)
+O = 5.00e-18
+C = 6.00e-18
+N = 7.00e-18
+S = 1.20e-17
 
-[infrared.kappa_cm2_g]          # IR mass opacities for the MOLECULAR region (cm^2 g^-1)
+[infrared.kappa_cm2_g]            # IR mass opacities kappa (κ) (cm^2 g^-1) for the bolometric region
 H2  = 1.0e-2
-H2O = 1.0
-O2  = 1.0
-CO2 = 1.0
-CO  = 1.0
-CH4 = 1.0
-N2  = 1.0
-NH3 = 1.0
-H2S = 1.0
+H2O = 1.0                         # IR (1–30 µm) Planck-mean-ish at ~1000 K, ~1 bar
+O2  = 2.0e-2
+CO2 = 5.0e-1
+CO  = 1.0e-1
+CH4 = 5.0e-1
+N2  = 1.0e-2
+NH3 = 5.0e-1
+H2S = 8.0e-1
 SO2 = 1.0
-S2  = 1.0
+S2  = 2.0e-1
 
-[diffusion.b]                   # Binary diffusion fits b_ij(T)=A*T^gamma (cm^-1 s^-1)
-# Keys can be "HO" or "H-O" (order-insensitive); symmetry is inferred.
-HO = { A=4.8e17, gamma=0.75 }
-HC = { A=6.5e17, gamma=0.70 }
+[diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys can be "HO" or "H-O"
+HO = { A=4.8e17, gamma=0.75 }     # Zahnle and Kasting 1986, O loss with background H
+HC = { A=5.5e17, gamma=0.72 }     # H–C slightly faster than H–N/O
 HN = { A=5.0e17, gamma=0.73 }
-HS = { A=5.8e17, gamma=0.70 }
-OC = { A=8.6e16, gamma=0.76 }
-ON = { A=9.0e16, gamma=0.78 }
+HS = { A=4.6e17, gamma=0.72 }     # H–S a touch slower (heavier partner)
+OC = { A=9.0e16, gamma=0.77 }     # heavy–heavy all ~1e17 with small spread
+ON = { A=9.5e16, gamma=0.78 }
 OS = { A=8.5e16, gamma=0.78 }
-CN = { A=7.5e16, gamma=0.74 }
-CS = { A=7.2e16, gamma=0.74 }
-NS = { A=8.0e16, gamma=0.76 }
+CN = { A=8.5e16, gamma=0.76 }
+CS = { A=7.8e16, gamma=0.76 }
+NS = { A=8.0e16, gamma=0.77 }
 
 [fractionation]
-allow_dynamic_light_major = true  # let the code choose i (usually H)
+allow_dynamic_light_major = true  # let the code pick the "light major species" automatically
 forced_light_major        = "H"   # used only if the above is false
-tol                       = 1e-5  # μ_outflow convergence tolerance
-max_iter                  = 100   # max fractionation iterations
+tol                       = 1e-5
+max_iter                  = 100
 
-[advanced]
-auto_normalize_X = true           # if composition mass fractions don’t sum to 1, rescale them
+[advanced]                        # optional overrides
+auto_normalize_X = true           # normalize composition if sum!=1
 ```
 
 ### Notes & units
@@ -185,13 +184,14 @@ BOREAS/
 │  ├─ mass_loss.py              # EL/RL solver, Parker wind normalization, RXUV search
 │  ├─ fractionation.py          # Odert-style multi-species fractionation
 │  ├─ config.py                 # TOML I/O and param application
-│  ├─ data/planet_params.json   # M, R, Teq, FXUV planet calatog
-│  └─ examples/configs/         # (optional) ship example TOMLs here if desired
-├─ examples/
+│  └─ data/planet_params.json   # M, R, Teq, FXUV planet calatog
+├─ examples/                    # ship example TOMLs here if desired
 │  ├─ configs/k2-18b.toml
 │  ├─ configs/my_planet.toml
 │  └─ run_single_planet.py
 ├─ tests/
+│  ├─ test_choose_light_and_heavy_major.py
+│  ├─ test_consistency_benchmark.py
 │  └─ test_fractionation_units.py
 ├─ pyproject.toml
 └─ README.md
