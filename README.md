@@ -1,29 +1,43 @@
 # BOREAS
 
-Hydrodynamic mass loss (EL/RL) with multi-species fractionation (H–O–C–N–S).  
-The bolometric (IR) region is **molecular**, while the escaping outflow is **fully dissociated atoms**.
+**BOREAS** is a Python package for modeling **hydrodynamic mass loss** from exoplanet atmospheres,  
+including **energy-limited (EL)** and **recombination-limited (RL)** regimes with
+**multi-species fractionation** among hydrogen (H), oxygen (O), carbon (C), nitrogen (N), and sulfur (S).
 
-> Package name: **boreas** · Import name: **boreas**  
-> Requires **Python ≥ 3.9**
+The code couples a **molecular bolometric (IR) region** to a **fully dissociated atomic outflow**,  
+tracking composition-dependent escape and diffusive separation self-consistently.
+
+> **Package name:** boreas · **Import name:** boreas
+> **Requires:** Python ≥ 3.9
+> **Author:** M. Valatsou (2025)
 
 ---
 
 ## Installation
 
-### Option A — install from this repo
+You can either clone the repository for development or install directly from GitHub.
+
+### Option A — Local Clone
 
 ```bash
-# from the repo root:
+# clone repo
+git clone https://github.com/ExoInteriors/BOREAS.git
+cd BOREAS
+# create environment
 python -m venv .venv
 source .venv/bin/activate # Windows: .venv\Scripts\activate
+# upgrade pip and install in editable (development) mode
 python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
+This installs BOREAS as an editable package (pip install -e .), 
+so any code edits take effect immediately.
+
 ### Option B — one-liner install from GitHub (link might be broken)
 
 ```bash
-pip install "boreas @ git+https://github.com/ExoInteriors/BOREAS.git@proteus#"
+pip install "boreas @ git+https://github.com/ExoInteriors/BOREAS.git@main"
 ```
 
 ## Quick start (run an example)
