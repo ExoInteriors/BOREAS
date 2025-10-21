@@ -57,7 +57,9 @@ class MassLoss:
 
         # integrate Parker wind to get tau geometrically
         rho_shape = (RS_flow / r)**2 * (cs / u)                     # dimensionless (from continuity rho u r^2 = const). captures how density falls with r, independent of units
-        tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))        # geometric column, cm
+        tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))            # geometric column, cm. We do not use "np.trapezoid" because it assumes x increasing, while we do rho and r[::-1] = decreasing.
+        #  tau = np.trapezoid(rho_shape, r)  # no reversal          # we could try this line with np.trapezoid but np.trapz remains officially supported and backward-compatible for now.
+
         # OR
         # from scipy.integrate import trapezoid
         # tau = np.abs(trapezoid(rho_shape[::-1], r[::-1]))
