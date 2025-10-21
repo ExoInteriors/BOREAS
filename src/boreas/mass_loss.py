@@ -57,7 +57,7 @@ class MassLoss:
 
         # integrate Parker wind to get tau geometrically
         rho_shape = (RS_flow / r)**2 * (cs / u)                     # dimensionless (from continuity rho u r^2 = const). captures how density falls with r, independent of units
-        tau = np.abs(np.trapezoid(rho_shape[::-1], r[::-1]))        # geometric column, cm
+        tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))        # geometric column, cm
         # OR
         # from scipy.integrate import trapezoid
         # tau = np.abs(trapezoid(rho_shape[::-1], r[::-1]))
@@ -115,6 +115,7 @@ class MassLoss:
         cs_outflow = self.compute_sound_speed(RXUV, m_planet)
         cs_outflow = min(cs_outflow, 1.2e6) # Limit sound speed to T ~ 10^4 K
         # Mdot = self.compute_mdot_only(cs_outflow, RXUV, m_planet) # move this lower down
+        
         # parker geometry
         Rs = G * m_planet / (2. * cs_outflow**2)
         
@@ -149,13 +150,13 @@ class MassLoss:
         return diff, time_scale_ratio, rho_eq, rho_pe
 
     def find_RXUV_solution_EL(self, r_planet, m_planet, rho_bolo, cs_bolo, FXUV_photon,
-                              accept_min_abs_f=1e-2, scan_Rmax_mult=50.0, nscan=24):
+                              accept_min_abs_f=1e-2, nscan=24):
         """
         RXUV solution for the energy-limited (EL) case.
         """
         Rp = float(r_planet)
         R_min = Rp * 1.001
-        R_max = Rp * float(scan_Rmax_mult)
+        R_max = Rp * 10
         R_grid = np.geomspace(R_min, R_max, int(nscan))
     
         def eval_at(R):
@@ -304,8 +305,8 @@ class MassLoss:
 
                 # photo layer
                 mu_bolo    = self.params.get_mmw_bolometric()
-                # FIXME: should it be cs_bolo = np.sqrt(k_b * T_eq / (mu_bolo))?
                 cs_bolo    = np.sqrt(k_b * T_eq / (m_H * mu_bolo))          # always calculated with bolometric mu 
+                # FIXME: should it be cs_bolo = np.sqrt(k_b * T_eq / (mu_bolo))?
                 kappa_bolo = self.params.kappa_p_all
                 # kappa_bolo = np.clip(self.params.kappa_p_all, 1e-3, 10.0) # tune bounds
                 rho_bolo   = G * m_p / r_p**2 / (kappa_bolo * cs_bolo**2)   # the anchor density at r=Rp used to get rho_eq by an isothermal scale height.
