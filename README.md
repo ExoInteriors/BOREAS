@@ -13,6 +13,12 @@ tracking composition-dependent escape and diffusive separation self-consistently
 > **Author:** M. Valatsou (2025)
 
 ---
+## License and Usage Notice
+
+This repository is made public for transparency and collaboration but is **not open source**.
+Use of this code for research, publication, or derivative work requires explicit written permission from the author.
+Until the author publishes a paper covering the full code, any scientific use must include the author as a co-author or obtain written permission to waive that requirement.
+Please see the LICENSE file for full terms or contact Marilina Valatsou (mvalatsou@phys.ethz.ch) to discuss collaboration or permission requests.
 
 ## Installation
 
