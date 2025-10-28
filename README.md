@@ -180,8 +180,8 @@ auto_normalize_X = true           # normalize composition if sum!=1
 
 ## Built-in planet data
 
-### Packaged under boreas.data/planet_params.json (mass [M⊕], radius [R⊕], Teq [K], FXUV [erg cm⁻² s⁻¹]). 
-### Use [planet].name = "<key>" to pull those numbers. You can open that JSON to see available keys.
+Packaged under boreas.data/planet_params.json (mass [M⊕], radius [R⊕], Teq [K], FXUV [erg cm⁻² s⁻¹]). 
+Use [planet].name = "<key>" to pull those numbers. You can open that JSON to see available keys.
 
 ## Running tests (optional but helpful)
 
