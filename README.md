@@ -8,8 +8,11 @@ The code couples a **molecular bolometric (IR) region** to a **fully dissociated
 tracking composition-dependent escape and diffusive separation self-consistently.
 
 > **Package name:** boreas
+> 
 > **Import name:** boreas
+>
 > **Requires:** Python ≥ 3.9
+>
 > **Authors:** M. Valatsou, J. Owen, C. Dorn (2025)
 
 ---
