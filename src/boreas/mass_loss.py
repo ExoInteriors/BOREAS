@@ -59,10 +59,6 @@ class MassLoss:
         rho_shape = (RS_flow / r)**2 * (cs / u)                     # dimensionless (from continuity rho u r^2 = const). captures how density falls with r, independent of units
         tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))            # geometric column, cm. We do not use "np.trapezoid" because it assumes x increasing, while we do rho and r[::-1] = decreasing.
         #  tau = np.trapezoid(rho_shape, r)  # no reversal          # we could try this line with np.trapezoid but np.trapz remains officially supported and backward-compatible for now.
-
-        # OR
-        # from scipy.integrate import trapezoid
-        # tau = np.abs(trapezoid(rho_shape[::-1], r[::-1]))
         
         # mass absorption coefficient at XUV for mixtures
         chi_xuv = self.params.xuv_cross_section_per_mass()          # mass absorption coefficient at XUV for mixtures
@@ -82,7 +78,8 @@ class MassLoss:
         Solve for c_s such that computed Mdot matches the energy-limited rate.
         """
         G, FXUV, eta = self.params.G, self.params.get_param('FXUV'), self.params.eff
-        Mdot_EL = eta * np.pi * RXUV**3 / (4 * G * m_planet) * FXUV # FXUV is the planet-wide averaged absorbed flux (i.e., already divided by 4 compared to the stellar flux at the orbit)? Hence we multiply by 1/4
+        Mdot_EL = eta * np.pi * RXUV**3 / (4 * G * m_planet) * FXUV
+        # FXUV is the planet-wide averaged absorbed flux (i.e., already divided by 4 compared to the stellar flux at the orbit)? Hence we multiply by 1/4
 
         lower_bound_initial, upper_bound = 2e5, 1e8 # initially 2e5, 1e13
 
@@ -116,7 +113,6 @@ class MassLoss:
         # outflow cs that matches EL power (bounded)
         cs_outflow = self.compute_sound_speed(RXUV, m_planet)
         cs_outflow = min(cs_outflow, 1.2e6) # Limit sound speed to T ~ 10^4 K
-        # Mdot = self.compute_mdot_only(cs_outflow, RXUV, m_planet) # move this lower down
         
         # parker geometry
         Rs = G * m_planet / (2. * cs_outflow**2)
@@ -139,20 +135,18 @@ class MassLoss:
             
         # flow density at RXUV from continuity with the EL-consistent Mdot
         Mdot = self.compute_mdot_only(cs_outflow, RXUV, m_planet)
-        # rho_pe = Mdot / (4 * np.pi * r_planet**2 * u_launch) # why were we doing r_planet**2? this should be evaluated at RXUV
+        # rho_pe = Mdot / (4 * np.pi * r_planet**2 * u_launch) # <--------- this should be evaluated at RXUV, correct?
         rho_pe = Mdot / (4.0 * np.pi * RXUV**2 * u_launch)
         
         # EL balance function: (H - Q)/(2H)
         H_term = rho_eq * cs_bolo**2
         Q_term = rho_pe * (u_launch**2 + cs_outflow**2)
-        
         # diff = (rho_eq * cs_bolo**2 - rho_pe * (u_launch**2 + cs_outflow**2)) / (2. * rho_eq * cs_bolo**2)
         diff = (H_term - Q_term) / (2.0 * H_term)
         
         return diff, time_scale_ratio, rho_eq, rho_pe
 
-    def find_RXUV_solution_EL(self, r_planet, m_planet, rho_bolo, cs_bolo, FXUV_photon,
-                              accept_min_abs_f=1e-2, nscan=24):
+    def find_RXUV_solution_EL(self, r_planet, m_planet, rho_bolo, cs_bolo, FXUV_photon, accept_min_abs_f=1e-2, nscan=24):
         """
         RXUV solution for the energy-limited (EL) case.
         """
@@ -252,7 +246,7 @@ class MassLoss:
 
         Mdot_RL = 4 * np.pi * RXUV**2 * m_H * nb * u_RL
         
-        # rho_pe = Mdot_RL / (4 * np.pi * r_planet**2 * u_RL) # why were we doing r_planet**2? this should be evaluated at RXUV
+        # rho_pe = Mdot_RL / (4 * np.pi * r_planet**2 * u_RL) # <------------ this should be evaluated at RXUV, correct?
         rho_pe = Mdot_RL / (4 * np.pi * RXUV**2 * u_RL)
 
         diff = (rho_eq * cs_bolo**2 - rho_pe * (u_RL**2 + cs_RL**2)) / (2. * rho_eq * cs_bolo**2)
@@ -308,7 +302,6 @@ class MassLoss:
                 # photo layer
                 mu_bolo    = self.params.get_mmw_bolometric()
                 cs_bolo    = np.sqrt(k_b * T_eq / (m_H * mu_bolo))          # always calculated with bolometric mu 
-                # FIXME: should it be cs_bolo = np.sqrt(k_b * T_eq / (mu_bolo))?
                 kappa_bolo = self.params.kappa_p_all
                 # kappa_bolo = np.clip(self.params.kappa_p_all, 1e-3, 10.0) # tune bounds
                 rho_bolo   = G * m_p / r_p**2 / (kappa_bolo * cs_bolo**2)   # the anchor density at r=Rp used to get rho_eq by an isothermal scale height.

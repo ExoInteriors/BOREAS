@@ -349,5 +349,5 @@ class Fractionation:
 
             # clear temporary μ so next planet starts clean
             self.params.update_param('mmw_outflow_eff', None)
-
+            
         return out
