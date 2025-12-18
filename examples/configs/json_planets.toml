@@ -1,0 +1,63 @@
+[planet]
+name           = "TOI-431 b"     # look up mass(grams)/radius(cm)/Teq(K) in packaged data.
+FXUV_erg_cm2_s = "from_data"     # "from_data" to read .json value, or input value. Incident XUV (energy flux), or stellar irradiance at the planet’s orbit, ergs cm-2 s-1
+
+[composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
+H2  = 1
+H2O = 0
+O2  = 0
+CO2 = 0
+CO  = 0
+CH4 = 0
+N2  = 0
+NH3 = 0
+H2S = 0
+SO2 = 0
+S2  = 0
+
+[physics]
+efficiency = 0.30                 # mass loss efficiency eta (η), dimensionless
+albedo     = 0.30
+beta       = 0.75                 # dayside redistribution factor, 0.5<b<1
+emissivity = 1.0
+
+[xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow
+H = 1.89e-18                      # representative neutral-atom σ at ~25 eV, sigma(E) ≈ sigma(25 eV) * (E / 25 eV)^(-3)
+O = 5.00e-18
+C = 6.00e-18
+N = 7.00e-18
+S = 1.20e-17
+
+[infrared.kappa_cm2_g]            # IR mass opacities kappa (κ) (cm^2 g^-1) for the bolometric region
+H2  = 1.0e-2
+H2O = 1.0                         # IR (1–30 µm) Planck-mean-ish at ~1000 K, ~1 bar
+O2  = 2.0e-2
+CO2 = 5.0e-1
+CO  = 1.0e-1
+CH4 = 5.0e-1
+N2  = 1.0e-2
+NH3 = 5.0e-1
+H2S = 8.0e-1
+SO2 = 1.0
+S2  = 2.0e-1
+
+[diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys can be "HO" or "H-O"
+HO = { A=4.8e17, gamma=0.75 }     # Zahnle and Kasting 1986, O loss with background H
+HC = { A=5.5e17, gamma=0.72 }     # H–C slightly faster than H–N/O
+HN = { A=5.0e17, gamma=0.73 }
+HS = { A=4.6e17, gamma=0.72 }     # H–S a touch slower (heavier partner)
+OC = { A=9.0e16, gamma=0.77 }     # heavy–heavy all ~1e17 with small spread
+ON = { A=9.5e16, gamma=0.78 }
+OS = { A=8.5e16, gamma=0.78 }
+CN = { A=8.5e16, gamma=0.76 }
+CS = { A=7.8e16, gamma=0.76 }
+NS = { A=8.0e16, gamma=0.77 }
+
+[fractionation]
+allow_dynamic_light_major = true  # let the code pick the "light major species" automatically
+forced_light_major        = "H"   # used only if the above is false
+tol                       = 1e-5
+max_iter                  = 100
+
+[advanced]                        # optional overrides
+auto_normalize_X = true           # normalize composition if sum!=1

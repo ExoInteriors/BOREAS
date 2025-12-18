@@ -242,6 +242,7 @@ class ModelParams:
         (X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2) = X
         
         # particle numbers per unit bulk mass from each reservoir
+        # OR atoms per bulk mass from each reservoir (up to a constant 1/m_H)
         N_H2  = X_H2  / self.mmw_H2_outflow   if X_H2  > 0 else 0.0
         N_H2O = X_H2O / self.mmw_H2O_outflow  if X_H2O > 0 else 0.0
         N_O2  = X_O2  / self.mmw_O2_outflow   if X_O2  > 0 else 0.0
@@ -254,12 +255,19 @@ class ModelParams:
         N_SO2 = X_SO2 / self.mmw_SO2_outflow  if X_SO2 > 0 else 0.0
         N_S2  = X_S2  / self.mmw_S2_outflow   if X_S2  > 0 else 0.0
 
-        # atomic counts per bulk mass
-        N_H = 2.0*N_H2  + 2.0*N_H2O + 4.0*N_CH4 + 3.0*N_NH3 + 2.0*N_H2S
-        N_O = 1.0*N_H2O + 2.0*N_O2  + 2.0*N_CO2 + 1.0*N_CO  + 2.0*N_SO2
-        N_C = 1.0*N_CO2 + 1.0*N_CO  + 1.0*N_CH4
-        N_N = 2.0*N_N2  + 1.0*N_NH3
-        N_S = 1.0*N_H2S + 1.0*N_SO2 + 2.0*N_S2
+        # element atom counts per bulk mass
+        N_H = (2.0/2.0)*N_H2  + (2.0/3.0)*N_H2O + (4.0/5.0)*N_CH4 + (3.0/4.0)*N_NH3 + (2.0/3.0)*N_H2S
+        N_O = (1.0/3.0)*N_H2O + 1.0*N_O2        + (2.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (2.0/3.0)*N_SO2
+        N_C = (1.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (1.0/5.0)*N_CH4
+        N_N = 1.0*N_N2        + (1.0/4.0)*N_NH3
+        N_S = (1/3)*N_H2S     + (1.0/3.0)*N_SO2 + 1.0*N_S2
+
+        # # atomic counts per bulk mass
+        # N_H = 2.0*N_H2  + 2.0*N_H2O + 4.0*N_CH4 + 3.0*N_NH3 + 2.0*N_H2S
+        # N_O = 1.0*N_H2O + 2.0*N_O2  + 2.0*N_CO2 + 1.0*N_CO  + 2.0*N_SO2
+        # N_C = 1.0*N_CO2 + 1.0*N_CO  + 1.0*N_CH4
+        # N_N = 2.0*N_N2  + 1.0*N_NH3
+        # N_S = 1.0*N_H2S + 1.0*N_SO2 + 2.0*N_S2
 
         # mixing ratios relative to H from Odert et al. 2018
         if N_H <= 0.0:
@@ -285,11 +293,18 @@ class ModelParams:
         N_SO2 = X_SO2 / self.mmw_SO2_outflow  if X_SO2 > 0 else 0.0
         N_S2  = X_S2  / self.mmw_S2_outflow   if X_S2  > 0 else 0.0
 
-        N_H = 2.0*N_H2  + 2.0*N_H2O + 4.0*N_CH4 + 3.0*N_NH3 + 2.0*N_H2S
-        N_O = 1.0*N_H2O + 2.0*N_O2  + 2.0*N_CO2 + 1.0*N_CO  + 2.0*N_SO2
-        N_C = 1.0*N_CO2 + 1.0*N_CO  + 1.0*N_CH4
-        N_N = 2.0*N_N2  + 1.0*N_NH3
-        N_S = 1.0*N_H2S + 1.0*N_SO2 + 2.0*N_S2
+        # N_H = 2.0*N_H2  + 2.0*N_H2O + 4.0*N_CH4 + 3.0*N_NH3 + 2.0*N_H2S
+        # N_O = 1.0*N_H2O + 2.0*N_O2  + 2.0*N_CO2 + 1.0*N_CO  + 2.0*N_SO2
+        # N_C = 1.0*N_CO2 + 1.0*N_CO  + 1.0*N_CH4
+        # N_N = 2.0*N_N2  + 1.0*N_NH3
+        # N_S = 1.0*N_H2S + 1.0*N_SO2 + 2.0*N_S2
+        
+        N_H = (2.0/2.0)*N_H2  + (2.0/3.0)*N_H2O + (4.0/5.0)*N_CH4 + (3.0/4.0)*N_NH3 + (2.0/3.0)*N_H2S
+        N_O = (1.0/3.0)*N_H2O + 1.0*N_O2        + (2.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (2.0/3.0)*N_SO2
+        N_C = (1.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (1.0/5.0)*N_CH4
+        N_N = (2.0/2.0)*N_N2  + (1.0/4.0)*N_NH3
+        N_S = (1/3)*N_H2S     + (1.0/3.0)*N_SO2 + 1.0*N_S2
+        
         N_tot = N_H + N_O + N_C + N_N + N_S
         
         if N_tot <= 0.0:

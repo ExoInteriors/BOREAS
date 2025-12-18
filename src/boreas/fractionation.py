@@ -32,11 +32,18 @@ class FractionationPhysics:
         N_SO2 = X_SO2 / p.mmw_SO2_outflow if X_SO2 > 0 else 0.0
         N_S2  = X_S2  / p.mmw_S2_outflow  if X_S2  > 0 else 0.0
 
-        N = dict(H = 2*N_H2 + 2*N_H2O + 4*N_CH4 + 3*N_NH3 + 2*N_H2S,
-                O = 1*N_H2O + 2*N_O2  + 2*N_CO2 + 1*N_CO  + 2*N_SO2,
-                C = 1*N_CO2 + 1*N_CO  + 1*N_CH4,
-                N = 2*N_N2  + 1*N_NH3,
-                S = 1*N_H2S + 1*N_SO2 + 2*N_S2)
+        # N = dict(H = 2*N_H2 + 2*N_H2O + 4*N_CH4 + 3*N_NH3 + 2*N_H2S,
+        #         O = 1*N_H2O + 2*N_O2  + 2*N_CO2 + 1*N_CO  + 2*N_SO2,
+        #         C = 1*N_CO2 + 1*N_CO  + 1*N_CH4,
+        #         N = 2*N_N2  + 1*N_NH3,
+        #         S = 1*N_H2S + 1*N_SO2 + 2*N_S2)
+        
+        N = dict(H = (2.0/2.0)*N_H2 + (2.0/3.0)*N_H2O + (4.0/5.0)*N_CH4 + (3.0/4.0)*N_NH3 + (2.0/3.0)*N_H2S,
+                O = (1.0/3.0)*N_H2O + 1.0*N_O2        + (2.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (2.0/3.0)*N_SO2,
+                C = (1.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (1.0/5.0)*N_CH4,
+                N = 1.0*N_N2        + (1.0/4.0)*N_NH3,
+                S = (1/3)*N_H2S     + (1.0/3.0)*N_SO2 + 1.0*N_S2
+        )
         return N
 
     @staticmethod
