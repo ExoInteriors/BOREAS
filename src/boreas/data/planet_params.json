@@ -16,6 +16,6 @@
     "TOI 1430.01": {"radius": 2.1, "mass": 7, "teq": 813, "FXUV": 6800},
     "TOI 1683.01": {"radius": 2.3, "mass": 8, "teq": 927, "FXUV": 12000},
     "TOI 2076 b": {"radius": 2.52, "mass": 9, "teq": 797, "FXUV": 9500},
-    "my_planet": {"radius": 2.13, "mass": 3.34, "teq": 700, "FXUV": 0},
+    "my_planet": {"radius": 2.13, "mass": 3.34, "teq": 700, "FXUV": 1000},
     "GJ 3090 b": {"radius": 2.720, "mass": 15.323, "teq": 600, "FXUV": 6000}
 }
