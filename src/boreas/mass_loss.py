@@ -224,7 +224,7 @@ class MassLoss:
     def compare_densities_RL(self, RXUV, rho_bolo, r_planet, m_planet, cs_bolo, FXUV_photon):
         """
         Momentum balance for the recombination-limited (RL) case.
-        RL closure you coded is H-specific (uses H recombination to set the base electron density
+        RL closure coded is H-specific (uses H recombination to set the base electron density
         and fixes cs=1.2e6 cm s-1.
         """
         G, m_H, alpha_rec = self.params.G, self.params.m_H, self.params.alpha_rec
@@ -350,5 +350,12 @@ class MassLoss:
                     'EL_Rbest_over_Rp': float(e.R_over_Rp) if e.R_over_Rp is not None else None,
                 })
                 continue
-            
+                        
+            except ValueError:
+                # SKIP: numerical failure (e.g. NaN in cs root)
+                results.append({'m_planet': m_p,'r_planet': r_p,'Teq': T_eq,'FXUV': self.params.FXUV,
+                    'regime': 'SKIPPED','skip_reason': 'NaN_in_cs_root'
+                })
+                continue
+
         return results

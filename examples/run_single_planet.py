@@ -62,7 +62,6 @@ def main(cfg_path: Path, verbose: bool = False):
     print("T_outflow[K]:", r0.get("T_outflow"), ", mu_outflow:", r0.get("mmw_outflow"))
     print("phi_H_num:", r0.get("phi_H_num"), ", phi_O_num", r0.get("phi_O_num"), ", phi_C_num",  r0.get("phi_C_num"), ", phi_N_num",  r0.get("phi_N_num"), ", phi_S_num",  r0.get("phi_S_num"))
     print("x_O", r0.get("x_O"), ", x_C", r0.get("x_C"), ", x_N", r0.get("x_N"), ", x_S", r0.get("x_S"))
-    
 
 if __name__ == "__main__":
     args = parse_args()

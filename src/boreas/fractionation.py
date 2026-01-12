@@ -257,6 +257,8 @@ class Fractionation:
     def execute(self, mass_loss_results, mass_loss, tol=1e-5, max_iter=100, allow_dynamic_light_major=True, forced_light_major='H', debug=False):
         out = []
         for sol in mass_loss_results:
+            if sol.get("regime") == "SKIPPED":
+                continue
             Mp, Rp, Teq = sol['m_planet'], sol['r_planet'], sol['Teq']
             mu_eff  = self.params.get_mu_outflow_current()
             mu_prev = None
@@ -265,96 +267,122 @@ class Fractionation:
             final_hydro = dict(sol)
             final_res   = None
             
-            for _ in range(max_iter):
-                # 1) make current μ available to hydro transport
-                self.params.update_param('mmw_outflow_eff', mu_eff)
-                
-                # 2) run hydro-loss with RL disabled to get a consistent EL geometry for the current mu and chi_xuv
-                probe = mass_loss.compute_mass_loss_parameters(np.array([Mp]), np.array([Rp]), np.array([Teq]), rl_policy='never')[0]
-                RXUV_EL, cs_EL, Mdot_EL = probe['RXUV'], probe['cs'], probe['Mdot']
-                t_ratio_EL = probe.get('time_scale_ratio', 10.0) # default >>1
+            try:
+                for _ in range(max_iter):
+                    # 1) make current μ available to hydro transport
+                    self.params.update_param('mmw_outflow_eff', mu_eff)
+                    
+                    # 1.5) set an initial atomic_y_xuv before the first hydro call
+                    N = FractionationPhysics.atomic_counts_from_X(self.params)
+                    sN = sum(N.values())
+                    self.params.atomic_y_xuv = {k: N[k]/sN for k in ("H","C","N","O","S")} if sN > 0 else None
 
-                # fast selection of (i,j) without computing phi yet
-                T_out_EL = self.phys.T_outflow_from_cs(cs_EL, mu_eff)
-                i_guess, j_guess, _ = FractionationPhysics.choose_light_and_heavy_major(self.params, RXUV_EL, T_out_EL, Mp)
+                    # 2) run hydro-loss with RL disabled to get a consistent EL geometry for the current mu and chi_xuv
+                    probe = mass_loss.compute_mass_loss_parameters(np.array([Mp]), np.array([Rp]), np.array([Teq]), rl_policy='never')[0]
+                    if probe.get("regime") == "SKIPPED":
+                        # cannot fractionate without a valid EL geometry
+                        continue
+                    RXUV_EL, cs_EL, Mdot_EL = probe['RXUV'], probe['cs'], probe['Mdot']
+                    t_ratio_EL = probe.get('time_scale_ratio', 10.0) # default >>1
 
-                # 3) if i==H and EL says RL regime, recompute hydro once in RL. else keep EL.
-                if (i_guess == 'H') and (t_ratio_EL < 1.0):
-                    hydro = mass_loss.compute_mass_loss_parameters(np.array([Mp]), np.array([Rp]), np.array([Teq]), rl_policy='if_H', light_major='H')[0]
-                else:
-                    hydro = probe
+                    # fast selection of (i,j) without computing phi yet
+                    T_out_EL = self.phys.T_outflow_from_cs(cs_EL, mu_eff)
+                    i_guess, j_guess, _ = FractionationPhysics.choose_light_and_heavy_major(self.params, RXUV_EL, T_out_EL, Mp)
 
-                RXUV, cs, Mdot = hydro['RXUV'], hydro['cs'], hydro['Mdot']
+                    # 3) if i==H and EL says RL regime, recompute hydro once in RL. else keep EL.
+                    if (i_guess == 'H') and (t_ratio_EL < 1.0):
+                        hydro = mass_loss.compute_mass_loss_parameters(np.array([Mp]), np.array([Rp]), np.array([Teq]), rl_policy='if_H', light_major='H')[0]
+                    else:
+                        hydro = probe
+
+                    RXUV, cs, Mdot = hydro['RXUV'], hydro['cs'], hydro['Mdot']
+        
+                    Fmass = Mdot / (4.0*np.pi*RXUV**2) # mass flux, g cm^-2 s^-1
+                    
+                    # 3.5 RL/H temperature override just for fractionation physics
+                    # Find the current light-major i (independent of T, so a provisional T is fine):
+                    i_now, _, _ = FractionationPhysics.choose_light_and_heavy_major(self.params, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp)
+
+                    if (hydro['regime'] == 'RL'):
+                        # Use ~1e4 K for the outflow when H controls the thermodynamics (RL)
+                        T_out = 1.0e4  # K
+                    else:
+                        # EL case or non-H light-major: keep usual mapping from cs & μ
+                        T_out = self.phys.T_outflow_from_cs(cs, mu_eff)
+
+                    # 4) fractionation with this final geometry and T_out
+                    res = self.general.compute_fluxes(Fmass, RXUV, T_out, Mp, allow_dynamic_light_major=allow_dynamic_light_major, forced_light_major=forced_light_major)
     
-                Fmass = Mdot / (4.0*np.pi*RXUV**2) # mass flux, g cm^-2 s^-1
-                
-                # 3.5 RL/H temperature override just for fractionation physics
-                # Find the current light-major i (independent of T, so a provisional T is fine):
-                i_now, _, _ = FractionationPhysics.choose_light_and_heavy_major(self.params, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp)
+                    # 5) update mu from number fluxes
+                    phi = res['phi']
 
-                if (hydro['regime'] == 'RL'):
-                    # Use ~1e4 K for the outflow when H controls the thermodynamics (RL or i=H)
-                    T_out = 1.0e4  # K
-                else:
-                    # EL case or non-H light-major: keep your usual mapping from cs & μ
-                    T_out = self.phys.T_outflow_from_cs(cs, mu_eff)
+                    sumphi = max(sum(phi.get(s, 0.0) for s in ("H","C","N","O","S")), 1e-300)
+                    y_atomic = {s: phi.get(s, 0.0)/sumphi for s in ("H","C","N","O","S")}
 
-                # 4) fractionation with this final geometry and T_out
-                res = self.general.compute_fluxes(Fmass, RXUV, T_out, Mp, allow_dynamic_light_major=allow_dynamic_light_major, forced_light_major=forced_light_major)
- 
-                # 5) update mu from number fluxes
-                phi = res['phi']
-                mu_new = self.phys.mu_eff_from_fluxes(phi.get('H',0.0), phi.get('O',0.0), phi.get('C',0.0), phi.get('N',0.0), phi.get('S',0.0))
+                    # make mixture visible to hydro on next iteration
+                    self.params.atomic_y_xuv = y_atomic
 
-                # store latest in case we converge now
-                final_hydro = hydro
-                final_res   = res
-                
-                # 6) convergence on mu
-                if (mu_prev is not None) and (abs(mu_new - mu_prev) <= tol*max(mu_prev, 1e-12)):
+                    mu_new = self.phys.mu_eff_from_fluxes(phi.get('H',0.0), phi.get('O',0.0), phi.get('C',0.0), phi.get('N',0.0), phi.get('S',0.0))
+
+                    # store latest in case we converge now
+                    final_hydro = hydro
+                    final_res   = res
+                    
+                    # 6) convergence on mu
+                    if abs(mu_new - mu_eff) <= tol*max(mu_eff, 1e-12):
+                        mu_eff = mu_new
+                        break
                     mu_eff = mu_new
-                    break
-                mu_prev = mu_eff = mu_new
-            
-            # ---- pack outputs for this planet ----
-            RXUV, cs, Mdot = final_hydro['RXUV'], final_hydro['cs'], final_hydro['Mdot']
-            T_used    = T_out                                   # this is what is used in fractionation. If RL, only then we set it to 1e4 K.
-            T_from_cs = self.phys.T_outflow_from_cs(cs, mu_eff) # this is what would be calculated from cs. To compare only with RL right now.
 
-            # fallbacks if (pathologically) final_res is None
-            if final_res is None:
-                # Single-shot; run once to populate fields
-                Fmass = Mdot / (4.0 * np.pi * RXUV**2) # mass flux
-                final_res = self.general.compute_fluxes(Fmass, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp,
-                    allow_dynamic_light_major=allow_dynamic_light_major, forced_light_major=forced_light_major)
+                    # OLD
+                    # if (mu_prev is not None) and (abs(mu_new - mu_prev) <= tol*max(mu_prev, 1e-12)):
+                    #     mu_eff = mu_new
+                    #     break
+                    # mu_prev = mu_eff = mu_new
+                
+                # ---- pack outputs for this planet ----
+                RXUV, cs, Mdot = final_hydro['RXUV'], final_hydro['cs'], final_hydro['Mdot']
+                T_used    = T_out                                   # this is what is used in fractionation. If RL, only then we set it to 1e4 K.
+                T_from_cs = self.phys.T_outflow_from_cs(cs, mu_eff) # this is what would be calculated from cs. To compare only with RL right now.
 
-            phi = final_res['phi']
-            x   = final_res['x']
-            f   = final_res['f']
+                # fallbacks if (pathologically) final_res is None
+                if final_res is None:
+                    # Single-shot; run once to populate fields
+                    Fmass = Mdot / (4.0 * np.pi * RXUV**2) # mass flux
+                    final_res = self.general.compute_fluxes(Fmass, RXUV, self.phys.T_outflow_from_cs(cs, mu_eff), Mp,
+                        allow_dynamic_light_major=allow_dynamic_light_major, forced_light_major=forced_light_major)
 
-            # augment the hydro dict with fractionation results
-            final_hydro.update({
-                # number fluxes:
-                'phi_H_num': phi.get('H',0.0), 'phi_O_num': phi.get('O',0.0),
-                'phi_C_num': phi.get('C',0.0), 'phi_N_num': phi.get('N',0.0),
-                'phi_S_num': phi.get('S',0.0),
-                # entrainment x and base ratios f:
-                'x_O': x.get('O', 1.0), 'x_C': x.get('C', 1.0), 'x_N': x.get('N', 1.0), 'x_S': x.get('S', 1.0),
-                'f_O': f['O'], 'f_C': f['C'], 'f_N': f['N'], 'f_S': f['S'],
-                # who is i / j:
-                'light_major_i': final_res['i'], 'heavy_major_j': final_res['j'],
-                # thermodynamics:
-                'mmw_outflow': mu_eff, 
-                'T_outflow': T_used,                        # used for fractionation
-                'T_from_cs_mu': T_from_cs,                  # diagnostic
-                # regimes:
-                'fractionation_mode': final_res['mode'],    # Odert branch (energy- vs diffusion-limited in the multi-species sense)
-                # 'regime' stays whatever mass_loss reported (EL/RL)
-            })
+                phi = final_res['phi']
+                x   = final_res['x']
+                f   = final_res['f']
 
-            out.append(final_hydro)
+                # augment the hydro dict with fractionation results
+                final_hydro.update({
+                    # number fluxes:
+                    'phi_H_num': phi.get('H',0.0), 'phi_O_num': phi.get('O',0.0),
+                    'phi_C_num': phi.get('C',0.0), 'phi_N_num': phi.get('N',0.0),
+                    'phi_S_num': phi.get('S',0.0),
+                    # entrainment x and base ratios f:
+                    'x_O': x.get('O', 1.0), 'x_C': x.get('C', 1.0), 'x_N': x.get('N', 1.0), 'x_S': x.get('S', 1.0),
+                    'f_O': f['O'], 'f_C': f['C'], 'f_N': f['N'], 'f_S': f['S'],
+                    # who is i / j:
+                    'light_major_i': final_res['i'], 'heavy_major_j': final_res['j'],
+                    # thermodynamics:
+                    'mmw_outflow': mu_eff, 
+                    'T_outflow': T_used,                        # used for fractionation
+                    'T_from_cs_mu': T_from_cs,                  # diagnostic
+                    # regimes:
+                    'fractionation_mode': final_res['mode'],    # Odert branch (energy- vs diffusion-limited in the multi-species sense)
+                    # 'regime' stays whatever mass_loss reported (EL/RL)
+                })
 
-            # clear temporary μ so next planet starts clean
-            self.params.update_param('mmw_outflow_eff', None)
+                out.append(final_hydro)
+
+                # # clear temporary μ so next planet starts clean
+                # self.params.atomic_y_xuv = None
+                # self.params.update_param('mmw_outflow_eff', None)
+            finally:
+                self.params.atomic_y_xuv = None
+                self.params.mmw_outflow_eff = None
             
         return out

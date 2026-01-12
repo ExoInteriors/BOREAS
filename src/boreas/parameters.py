@@ -117,8 +117,10 @@ class ModelParams:
         
         self._warned_pairs = set()
         
+        self.atomic_y_xuv = None   # optional dict of atomic number fractions at RXUV
+        
         #TODO: if r0 is added (mesopause, base of the outflow, different from RXUV)
-        #  # misc fractionation params
+        # # misc fractionation params
         # self.r0_base = None                 # if None, treat r0 ≡ RXUV for now
         # self.fractionation_T_mode = "base"  # "base" | "from_cs" | "fixed"
         # self.fractionation_T_fixed = None
@@ -173,6 +175,32 @@ class ModelParams:
         IMPORTANT: This function implicitly assumes all absorbers are neutral. 
         Near the base, hydrogen may be partly ionized in RL conditions. We ignore these cases.
         """
+        
+        # -----------------------
+        # 1) Atomic override path
+        # -----------------------
+        # --- If atomic mixture at RXUV is provided, use it (fully dissociated) ---
+        y = getattr(self, "atomic_y_xuv", None)
+        mu_eff = getattr(self, "mmw_outflow_eff", None)
+
+        if y is not None and mu_eff is not None and mu_eff > 0:
+            # normalize defensively
+            s = sum(max(v, 0.0) for v in y.values())
+            if s <= 0:
+                raise ValueError("atomic_y_xuv provided but sums to 0.")
+            yN = {k: max(v, 0.0)/s for k, v in y.items()}
+
+            # chi = Σ sigma_i * y_i / (mu m_H)
+            chi = 0.0
+            for sp in ("H","C","N","O","S"):
+                chi += self.sigma_XUV[sp] * yN.get(sp, 0.0)
+            chi /= (mu_eff * self.m_H)
+            
+            return chi # cm^2 g^-1
+            
+        # ------------------------------------
+        # 2) Reservoir fallback
+        # ------------------------------------
         (X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2) = self.get_X_tuple()
 
         chi = 0.0
