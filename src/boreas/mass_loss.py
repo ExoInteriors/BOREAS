@@ -12,6 +12,9 @@ class MomentumBalanceError(RuntimeError):
     # TODO: add function that takes the closest possible root for RXUV if momentum balance is not satisfied
     # TODO: as long as it is smaller than a set tolerance
 
+class SoundSpeedRootError(RuntimeError):
+    pass
+
 class MassLoss:
     def __init__(self, params):
         self.params = params
@@ -55,11 +58,18 @@ class MassLoss:
             constant = (1. - 4. * np.log(RXUV / RS_flow) - 4. * (RS_flow / RXUV) - 1e-13)
             u = FS.get_parker_wind_const(r, cs, RS_flow, constant)
 
+            if np.any(~np.isfinite(u)) or np.any(u <= 0):
+                raise ValueError(f"Bad u: min(u)={np.nanmin(u)}, RXUV={RXUV}, cs={cs}, RS_flow={RS_flow}")
+
         # integrate Parker wind to get tau geometrically
         rho_shape = (RS_flow / r)**2 * (cs / u)                     # dimensionless (from continuity rho u r^2 = const). captures how density falls with r, independent of units
-        tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))            # geometric column, cm. We do not use "np.trapezoid" because it assumes x increasing, while we do rho and r[::-1] = decreasing.
+        # tau = np.abs(np.trapz(rho_shape[::-1], r[::-1]))            # geometric column, cm. We do not use "np.trapezoid" because it assumes x increasing, while we do rho and r[::-1] = decreasing.
+        tau = np.abs(np.trapezoid(rho_shape[::-1], r[::-1]))
         #  tau = np.trapezoid(rho_shape, r)  # no reversal          # we could try this line with np.trapezoid but np.trapz remains officially supported and backward-compatible for now.
-        
+        if not np.isfinite(tau) or tau == 0:
+            raise ValueError(f"Bad tau: {tau}, RXUV={RXUV}, cs={cs}, RS_flow={RS_flow}, r[0]={r[0]}, r[-1]={r[-1]}")
+
+
         # mass absorption coefficient at XUV for mixtures
         chi_xuv = self.params.xuv_cross_section_per_mass()          # mass absorption coefficient at XUV for mixtures
         
@@ -89,12 +99,19 @@ class MassLoss:
 
         f1 = mdot_difference(lower_bound_initial)
         if f1 < 0:
-            return brentq(mdot_difference, lower_bound_initial, upper_bound)
+            # return brentq(mdot_difference, lower_bound_initial, upper_bound)            
+            try:                
+                return brentq(mdot_difference, lower_bound_initial, upper_bound)
+            except ValueError as e:
+                raise SoundSpeedRootError(f"Sound-speed root failed at RXUV={RXUV:.3e}: {e}") from e            
         else:
             while f1 > 0:
                 lower_bound_initial *= 0.95
                 f1 = mdot_difference(lower_bound_initial)
-            return brentq(mdot_difference, lower_bound_initial, upper_bound / 10)
+            try:                
+                return brentq(mdot_difference, lower_bound_initial, upper_bound / 10)
+            except ValueError as e:
+                raise SoundSpeedRootError(f"Sound-speed root failed at RXUV={RXUV:.3e}: {e}") from e
 
     ### Regime-specific density comparisons ###
     def compare_densities_EL(self, RXUV, rho_bolo, r_planet, m_planet, cs_bolo, FXUV_photon):
@@ -159,17 +176,26 @@ class MassLoss:
             return self.compare_densities_EL(R, rho_bolo, r_planet, m_planet, cs_bolo, FXUV_photon)
 
         vals = []
+        first_exc = None
+        
         for R in R_grid:
             try:
                 d, tsr, rq, rp = eval_at(R)
-            except Exception:
+            except Exception as exc:
+                if first_exc is None:
+                    first_exc = exc
                 d, tsr, rq, rp = np.nan, np.nan, np.nan, np.nan
             vals.append((R, d, tsr, rq, rp))
-
+            
         # keep finite f(R)
-        vals = [(R, d, tsr, rq, rp) for (R, d, tsr, rq, rp) in vals if np.isfinite(d)]
-        if not vals:
-            raise MomentumBalanceError("EL scan produced no finite f(R) values")
+        finite_vals = [(R, d, tsr, rq, rp) for (R, d, tsr, rq, rp) in vals if np.isfinite(d)]
+        if not finite_vals:
+            msg = "EL scan produced no finite f(R) values"
+            if first_exc is not None:
+                msg += f"; first exception: {type(first_exc).__name__}: {first_exc}"
+            raise MomentumBalanceError(msg)
+
+        vals = finite_vals
 
         # try to find first sign change
         bracket = None
@@ -257,25 +283,25 @@ class MassLoss:
         """
         RXUV solution for the recombination-limited (RL) case.
         """
-        RXUV_lower_bound = r_planet * 1.001
-        RXUV_upper_bound = r_planet * 10
+        R_min = r_planet * 1.001
+        R_max = r_planet * 10
 
         def root_function(RXUV):
             diff, _, _ = self.compare_densities_RL(RXUV, rho_bolo, r_planet, m_planet, cs_bolo, FXUV_photon)
             return diff
 
-        f_lower = root_function(RXUV_lower_bound)
-        f_upper = root_function(RXUV_upper_bound)
+        f_lower = root_function(R_min)
+        f_upper = root_function(R_max)
         if f_lower * f_upper > 0:
             max_iterations = 100
             for _ in range(max_iterations):
-                RXUV_upper_bound *= 1.5
-                f_upper = root_function(RXUV_upper_bound)
+                R_max *= 1.5
+                f_upper = root_function(R_max)
                 if f_lower * f_upper < 0:
                     break
             else:
                 raise ValueError("Cannot find valid bounds for RXUV root finding.")
-        RXUV_solution = brentq(root_function, RXUV_lower_bound, RXUV_upper_bound)
+        RXUV_solution = brentq(root_function, R_min, R_max)
         _, rho_eq, rho_pe = self.compare_densities_RL(RXUV_solution, rho_bolo, r_planet, m_planet, cs_bolo, FXUV_photon)
         
         return RXUV_solution, rho_eq, rho_pe
@@ -342,19 +368,23 @@ class MassLoss:
                 results.append(sol)
                 
             except MomentumBalanceError as e:
-                # SKIP: record a diagnostic shell and continue
-                results.append({'m_planet':m_p,'r_planet':r_p,'Teq':T_eq,'FXUV':self.params.FXUV,
-                    'regime': 'SKIPPED','skip_reason': 'EL_momentum_no_root',
+                results.append({'m_planet':m_p, 'r_planet':r_p, 'Teq':T_eq, 'FXUV':self.params.FXUV,
+                    'RXUV': None, 'cs': None, 'Mdot': None,
+                    'regime': 'SKIPPED',
+                    'skip_reason': 'EL_momentum_no_root',
+                    'error': str(e),
                     'EL_min_abs_f': float(e.min_abs_f) if e.min_abs_f is not None else None,
                     'EL_Rbest': float(e.R_best) if e.R_best is not None else None,
                     'EL_Rbest_over_Rp': float(e.R_over_Rp) if e.R_over_Rp is not None else None,
                 })
                 continue
                         
-            except ValueError:
-                # SKIP: numerical failure (e.g. NaN in cs root)
-                results.append({'m_planet': m_p,'r_planet': r_p,'Teq': T_eq,'FXUV': self.params.FXUV,
-                    'regime': 'SKIPPED','skip_reason': 'NaN_in_cs_root'
+            except ValueError as e:
+                results.append({'m_planet': m_p, 'r_planet': r_p, 'Teq': T_eq, 'FXUV': self.params.FXUV,
+                    'RXUV': None, 'cs': None, 'Mdot': None,                                
+                    'regime': 'SKIPPED',
+                    'skip_reason': 'ValueError',
+                    'error': str(e),
                 })
                 continue
 
