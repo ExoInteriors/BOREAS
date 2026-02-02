@@ -9,7 +9,7 @@ tracking composition-dependent escape and diffusive separation self-consistently
 
 > **Package name:** boreas </br>
 > **Import name:** boreas </br>
-> **Requires:** Python ≥ 3.9 </br>
+> **Requires:** python ≥ 3.10, numpy ≥ 1.26, scipy ≥ 1.12 </br>
 > **Authors:** M. Valatsou, J. Owen, C. Dorn (2025)
 
 ---
@@ -22,17 +22,13 @@ Please see the LICENSE file for full terms or contact Marilina Valatsou (mvalats
 
 ## Installation
 
-You can either clone the repository for development or install directly from GitHub.
-
-### Option A — Local Clone
-
 ```bash
 # clone repo
 git clone https://github.com/ExoInteriors/BOREAS.git
 cd BOREAS
 # create environment
-python -m venv .venv
-source .venv/bin/activate # Windows: .venv\Scripts\activate
+python -m venv .venv        # or python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 # upgrade pip and install in editable (development) mode
 python -m pip install --upgrade pip
 python -m pip install -e .
@@ -41,39 +37,36 @@ python -m pip install -e .
 This installs BOREAS as an editable package (pip install -e .), 
 so any code edits take effect immediately.
 
-### Option B — one-liner install from GitHub (link might be broken)
-
-```bash
-pip install "boreas @ git+https://github.com/ExoInteriors/BOREAS.git@main"
-```
-
 ## Quick start (run an example)
 
 ### Examples live in examples/configs/. Use the runner:
 
 ```bash
-# default example (my_planet.toml)
+# default example, runs json_planets.toml
+# which has K2-18 b with pure H2/He envelope as default
 python examples/run_single_planet.py
 
 # explicit config (relative or absolute path)
-python examples/run_single_planet.py --config examples/configs/my_planet.toml
+python examples/run_single_planet.py --config examples/configs/json_planets.toml
 
 # extra prints, including input params such as mass, radius, Teq, FXUV
-python examples/run_single_planet.py -v -c examples/configs/my_planet.toml
+python examples/run_single_planet.py -v -c examples/configs/json_planets.toml
 ```
 
 ### Typical output
 
 ```bash
-Config: /.../examples/configs/my_planet.toml
-Planet: my_planet
-Regime: EL  RXUV[cm]: 1.23e+09  Mdot[g/s]: 4.56e+08
-light_major: H  heavy_major: O
-T_outflow[K]: 10000.0  mu_outflow: 1.02
+Done!
+Config: /.../BOREAS/examples/configs/json_planets.toml
+Planet: K2-18 b
+Regime: EL , RXUV[cm]: 1661392300.2227304 , Mdot[g/s]: 32791311.277301207
+light_major: H , heavy_major: None
+T_outflow[K]: 1985.980436403782 , mu_outflow: 1.0
+phi_H_num: 564890010334.2004 , phi_O_num 0.0 , phi_C_num 0.0 , phi_N_num 0.0 , phi_S_num 0.0
+x_O 0.0 , x_C 0.0 , x_N 0.0 , x_S 0.0
 ```
 
 > Notebook users: relative paths resolve from the notebook’s working directory. Either cd to the repo root first, or build an absolute Path to the TOML.
-
 
 ## How to run your own planet
 
@@ -82,6 +75,7 @@ T_outflow[K]: 10000.0  mu_outflow: 1.02
 cp examples/configs/my_planet.toml my_other_planet.toml
 ```
 2. Edit my_planet.toml (see the full schema below).
+
 3. Run it:
 ```bash
 python examples/run_single_planet.py --config my_other_planet.toml
@@ -106,10 +100,10 @@ python examples/run_single_planet.py -c examples/configs/my_planet.toml --csv  o
 ### A config describes one planet and the physics knobs. Example:
 ```bash
 [planet]
-name           = "my_planet"   # use packaged properties (mass, radius, Teq)
-FXUV_erg_cm2_s = "from_data"   # or a number (stellar irradiance at orbit; cm^-2 s^-1 * erg)
+name           = "K2-18b"         # use packaged properties (mass, radius, Teq)
+FXUV_erg_cm2_s = "from_data"      # or a number (stellar irradiance at orbit; cm^-2 s^-1 * erg)
 
-[composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
+[composition]                     # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
 H2  = 0.10
 H2O = 0.10
 O2  = 0.1
