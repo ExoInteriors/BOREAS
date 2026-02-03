@@ -1,5 +1,5 @@
 [planet]
-name           = "K2-18 b"       # look up mass(grams)/radius(cm)/Teq(K) in packaged data (planet_params.json)
+name           = "my_planet"       # look up mass(grams)/radius(cm)/Teq(K) in packaged data (planet_params.json)
 FXUV_erg_cm2_s = "from_data"     # "from_data" to read .json value, or input value. Incident XUV (energy flux), or stellar irradiance at the planet’s orbit, ergs cm-2 s-1
 
 [composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
@@ -21,12 +21,12 @@ albedo     = 0.30
 beta       = 0.75                 # dayside redistribution factor, 0.5<b<1
 emissivity = 1.0
 
-[xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow
-H = 1.89e-18                      # representative neutral-atom σ at ~20 eV, sigma(E) ≈ sigma(20 eV) * (E / 20 eV)^(-3)
-O = 5.00e-18
-C = 6.00e-18
-N = 7.00e-18
-S = 1.20e-17
+[xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
+H = 1.89e-18
+O = 1.09e-17
+C = 1.01e-17
+N = 1.41e-17
+S = 3.27e-17
 
 [infrared.kappa_cm2_g]            # IR mass opacities kappa (κ) (cm^2 g^-1) for the bolometric region
 H2  = 1.0e-2

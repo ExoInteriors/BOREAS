@@ -3,10 +3,10 @@ class ModelParams:
     Base class for handling model parameters and physical constants.
     Supports preset mixing modes for H2, H2O, CO2, CH4 combinations.
     """
-    def __init__(self):
+    
+    def __init__(self, E_XUV_eV: float = 20.0):
         # --- default mode controls ---
-        # Example stellar/XUV controls (set/overridden by main or star class)
-        self.FXUV       = 450.0              # erg cm^-2 s^-1 (placeholder default)
+        self.FXUV       = 450.0           # erg cm^-2 s^-1 (placeholder default)
 
         # other model parameters and constants
         self.albedo     = 0.3             # albedo of planet
@@ -16,20 +16,29 @@ class ModelParams:
         self.eff        = 0.3             # Mass-loss efficiency factor
         self.aplau      = 1.              # semi-major axis of the planet
         
-        # self.sigma_XUV  = 1.89e-18      # atomic XUV cross-section (of H), cm2
-        self.sigma_XUV = {'H':  1.89e-18,
-                          'O':  2.00e-18,  # placeholder
-                          'C':  2.50e-18,  # placeholder
-                          'N':  3.00e-18,  # placeholder
-                          'S':  6.00e-18,  # placeholder
+        # XUV cross-sections (cm2) per atom assuming neutral species and monochromatic XUV at 20 eV,
+        # for computing the mass absorption coefficient in XUV (χ_XUV, cm2 g-1).
+        self.sigma_XUV = {'H': 1.89e-18,  # atomic XUV cross-section (of H), cm2
+                        #   'O': 1.89e-18,  # placeholder
+                        #   'C': 2.50e-18,  # placeholder
+                        #   'N': 3.00e-18,  # placeholder
+                        #   'S': 6.00e-18,  # placeholder
+                        
+                        # Verner+1996 fits at 20 eV, but we keep the older value for hydrogen for now,
+                        # since the fits are not great near 20 eV and the older value is more commonly used.
+                        # 'H': 2.21e-18,
+                        'O': 1.09e-17,
+                        'C': 1.01e-17,
+                        'N': 1.41e-17,
+                        'S': 3.27e-17
                         }
 
         # --- physical constants ---
         # Universal constants
         self.G          = 6.67430e-8      # Gravitational constant, cm^3 g^-1 s^-2-1
-        self.mearth     = 5.972e27        # earth mass, grams
-        self.rearth     = 6.371e8         # earth radius, cm
-        self.E_photon   = 20 * 1.6e-12    # photon energy
+        self.mearth     = 5.972e27        # Earth mass, grams
+        self.rearth     = 6.371e8         # Earth radius, cm
+        self.E_photon   = 20 * 1.6e-12    # Photon energy
         self.k_b        = 1.380649e-16    # Boltzmann constant, erg K^
         # Atomic masses (in units of hydrogen-atom mass counts)
         self.am_h       = 1.0
@@ -38,7 +47,7 @@ class ModelParams:
         self.am_n       = 14.0
         self.am_s       = 32.0
         # Particle masses (grams)
-        self.m_H        = 1.6735575e-24 # g
+        self.m_H        = 1.6735575e-24   # g
         self.m_O        = self.am_o * self.m_H
         self.m_C        = self.am_c * self.m_H
         self.m_N        = self.am_n * self.m_H
@@ -152,7 +161,7 @@ class ModelParams:
     def get_param(self, key, default=None):
         return getattr(self, key, default)
     
-    # --- opacities and cross sections ---
+    # --- cross-section and opacity setters ---
     def _init_opacities(self):
         self._check_X_sum()
         X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2 = self.get_X_tuple()
@@ -395,7 +404,7 @@ class ModelParams:
         except Exception:
             raise NotImplementedError(f"No diffusion coefficient for pair {a}-{b}. Add it to diffusion_fits or implement b_{a}{b}.")
 
-    # --- others ---   
+    # --- other helpers ---   
     # to properly read the configs/*.toml files
     def set_composition(self, mapping: dict, auto_normalize: bool = True):
         """
@@ -453,7 +462,6 @@ class ModelParams:
         """Enable/disable auto-normalization for X_* when their sum != 1."""
         self.auto_normalize_X = bool(flag)
 
-    # 
     def set_diffusion_fits(self, mapping: dict):
         """
         mapping: {"HO": {"A":..., "gamma":...}, "H-O": {...}, ...}

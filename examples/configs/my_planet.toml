@@ -21,8 +21,8 @@ albedo     = 0.30
 beta       = 0.75                 # dayside redistribution factor, 0.5<b<1
 emissivity = 1.0
 
-[xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow
-H = 1.89e-18                      # representative neutral-atom σ at ~20 eV, sigma(E) ≈ sigma(20 eV) * (E / 20 eV)^(-3)
+[xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
+H = 1.89e-18
 O = 5.00e-18
 C = 6.00e-18
 N = 7.00e-18
