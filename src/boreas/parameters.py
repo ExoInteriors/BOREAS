@@ -116,12 +116,26 @@ class ModelParams:
         # these mirror the current hard-coded functions.
         self.diffusion_fits = {
             "HO": (4.8e17, 0.75),
-            "HC": (6.5e17, 0.70),
-            "HN": (5.0e17, 0.73),
-            "HS": (5.8e17, 0.70),
-            "ON": (9.0e16, 0.78),
-            "OS": (8.5e16, 0.78),
-            # You can include more; symmetry is handled in b_pair
+            # # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+            # "HC": (2.845e+18, 0.6563),
+            # "HN": (2.829e+18, 0.6563),
+            # "HS": (2.353e+18, 0.6569),
+            # "OC": (8.588e+17, 0.6561),
+            # "ON": (8.231e+17, 0.6561),
+            # "OS": (5.934e+17, 0.6563),
+            # "CN": (7.504e+17, 0.6561),
+            # "CS": (5.609e+17, 0.6562),
+            # "NS": (5.311e+17, 0.6562)
+            # Banks+Kockarts 1973 fits
+            "HC": (1.577e+18, 0.5),
+            "HN": (1.569e+18, 0.5),
+            "HS": (1.539e+18, 0.5),
+            "OC": (5.807e+17, 0.5),
+            "ON": (5.566e+17, 0.5),
+            "OS": (4.656e+17, 0.5),
+            "CN": (5.981e+17, 0.5),
+            "CS": (5.146e+17, 0.5),
+            "NS": (4.872e+17, 0.5)
         }
         
         self._warned_pairs = set()
@@ -299,13 +313,6 @@ class ModelParams:
         N_N = 1.0*N_N2        + (1.0/4.0)*N_NH3
         N_S = (1/3)*N_H2S     + (1.0/3.0)*N_SO2 + 1.0*N_S2
 
-        # # atomic counts per bulk mass
-        # N_H = 2.0*N_H2  + 2.0*N_H2O + 4.0*N_CH4 + 3.0*N_NH3 + 2.0*N_H2S
-        # N_O = 1.0*N_H2O + 2.0*N_O2  + 2.0*N_CO2 + 1.0*N_CO  + 2.0*N_SO2
-        # N_C = 1.0*N_CO2 + 1.0*N_CO  + 1.0*N_CH4
-        # N_N = 2.0*N_N2  + 1.0*N_NH3
-        # N_S = 1.0*N_H2S + 1.0*N_SO2 + 2.0*N_S2
-
         # mixing ratios relative to H from Odert et al. 2018
         if N_H <= 0.0:
             return 0.0, 0.0, 0.0, 0.0
@@ -329,12 +336,6 @@ class ModelParams:
         N_H2S = X_H2S / self.mmw_H2S_outflow  if X_H2S > 0 else 0.0
         N_SO2 = X_SO2 / self.mmw_SO2_outflow  if X_SO2 > 0 else 0.0
         N_S2  = X_S2  / self.mmw_S2_outflow   if X_S2  > 0 else 0.0
-
-        # N_H = 2.0*N_H2  + 2.0*N_H2O + 4.0*N_CH4 + 3.0*N_NH3 + 2.0*N_H2S
-        # N_O = 1.0*N_H2O + 2.0*N_O2  + 2.0*N_CO2 + 1.0*N_CO  + 2.0*N_SO2
-        # N_C = 1.0*N_CO2 + 1.0*N_CO  + 1.0*N_CH4
-        # N_N = 2.0*N_N2  + 1.0*N_NH3
-        # N_S = 1.0*N_H2S + 1.0*N_SO2 + 2.0*N_S2
         
         N_H = (2.0/2.0)*N_H2  + (2.0/3.0)*N_H2O + (4.0/5.0)*N_CH4 + (3.0/4.0)*N_NH3 + (2.0/3.0)*N_H2S
         N_O = (1.0/3.0)*N_H2O + 1.0*N_O2        + (2.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (2.0/3.0)*N_SO2
@@ -353,15 +354,34 @@ class ModelParams:
         return self.outflow_from_X(*self.get_X_tuple())
 
     # --- binary diffusion coefficients b_ij(T) (cm^-1 s^-1) ---
-    def b_HO(self, T):  return 4.8e17 * (T**0.75)     # Zahnle/Kasting 1986
-    def b_HC(self, T):  return 6.5e17 * (T**0.70)     # placeholder
-    def b_HN(self, T):  return 5.0e17 * (T**0.73)     # placeholder
-    def b_HS(self, T):  return 5.8e17 * (T**0.70)     # placeholder
+    # def b_HO(self, T):  return 4.8e17 * (T**0.75)       # Zahnle & Kasting 1986
+    # def b_HC(self, T):  return 2.845e+18 * (T**0.6563)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    # def b_HN(self, T):  return 2.829e+18 * (T**0.6563)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    # def b_HS(self, T):  return 2.353e+18 * (T**0.6569)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
     
-    def b_OC(self, T):  return (self.b_HO(T) * self.b_HC(T))**0.5 # placeholder
-    def b_ON(self, T):  return 9.0e16 * (T**0.78)     # placeholder
-    def b_OS(self, T):  return 8.5e16 * (T**0.78)     # placeholder
+    # def b_OC(self, T):  return 8.588e+17 * (T**0.6561)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    # def b_ON(self, T):  return 8.231e+17 * (T**0.6561)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    # def b_OS(self, T):  return 5.934e+17 * (T**0.6563)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    
+    # def b_CN(self, T):  return 7.504e+17 * (T**0.6561)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    # def b_CS(self, T):  return 5.609e+17 * (T**0.6562)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    
+    # def b_NS(self, T):  return 5.311e+17 * (T**0.6562)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
 
+    def b_HO(self, T):  return 4.8e17 * (T**0.75)    # Zahnle & Kasting 1986
+    def b_HC(self, T):  return 1.577e+18 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    def b_HN(self, T):  return 1.569e+18 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    def b_HS(self, T):  return 1.539e+18 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    
+    def b_OC(self, T):  return 5.807e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    def b_ON(self, T):  return 5.566e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    def b_OS(self, T):  return 4.656e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    
+    def b_CN(self, T):  return 5.981e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    def b_CS(self, T):  return 5.146e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    
+    def b_NS(self, T):  return 4.872e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    
     # map species keys to masses (g) and atomic masses (amu-like counts)
     def species_registry(self):
         return {
