@@ -9,7 +9,7 @@ tracking composition-dependent escape and diffusive separation self-consistently
 
 > **Package name:** boreas </br>
 > **Import name:** boreas </br>
-> **Requires:** python ≥ 3.10, numpy ≥ 1.26, scipy ≥ 1.12 </br>
+> **Requires:** python ≥ 3.11, numpy ≥ 1.26, scipy ≥ 1.12 </br>
 > **Authors:** M. Valatsou, J. Owen, C. Dorn (2025)
 
 ---
