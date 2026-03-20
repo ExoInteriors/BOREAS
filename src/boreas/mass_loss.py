@@ -8,9 +8,6 @@ class MomentumBalanceError(RuntimeError):
         self.min_abs_f = min_abs_f
         self.R_best = R_best
         self.R_over_Rp = R_over_Rp
-    
-    # TODO: add function that takes the closest possible root for RXUV if momentum balance is not satisfied
-    # TODO: as long as it is smaller than a set tolerance
 
 class SoundSpeedRootError(RuntimeError):
     pass
@@ -83,13 +80,24 @@ class MassLoss:
         Mdot = 4 * np.pi * RXUV**2 * rho[0] * u[0]
         return Mdot
 
+    def compute_mdot_el_target(self, RXUV, m_planet):
+        """
+        Energy-limited target mass-loss rate.
+
+        The user-facing/input FXUV is the incident stellar flux at the orbit.
+        For the EL branch we keep the notebook/Owen-style geometry by using the
+        planet-mean flux internally, FXUV_incident / 4. This is algebraically
+        equivalent to writing the standard EL expression with an explicit 1/4.
+        """
+        G, eta = self.params.G, self.params.eff
+        FXUV_mean = self.params.fxuv_global_mean()
+        return eta * 4.0 * np.pi * RXUV**3 / (G * m_planet) * FXUV_mean
+
     def compute_sound_speed(self, RXUV, m_planet):
         """
         Solve for c_s such that computed Mdot matches the energy-limited rate.
         """
-        G, FXUV, eta = self.params.G, self.params.get_param('FXUV'), self.params.eff
-        Mdot_EL = eta * np.pi * RXUV**3 / (4 * G * m_planet) * FXUV
-        # FXUV is the planet-wide averaged absorbed flux (i.e., already divided by 4 compared to the stellar flux at the orbit)? Hence we multiply by 1/4
+        Mdot_EL = self.compute_mdot_el_target(RXUV, m_planet)
 
         lower_bound_initial, upper_bound = 2e5, 1e8 # initially 2e5, 1e13
 
@@ -120,6 +128,10 @@ class MassLoss:
         Try to find an EL RXUV root.
         If no sign change and min|f| > accept_min_abs_f, raise MomentumBalanceError.
         Otherwise return the best-R solution.
+
+        Note: FXUV_photon here is kept as the incident photon flux, matching the
+        original notebook logic used for the EL/RL timescale diagnostic. The EL
+        mass-loss normalization itself is set separately by compute_mdot_el_target().
         """
         G, alpha = self.params.G, self.params.alpha_rec
     
@@ -143,7 +155,8 @@ class MassLoss:
             u_launch = cs_outflow
             Hflow = RXUV
             
-        # recombination timescale vs flow timescale (diagnostic)
+        # recombination timescale vs flow timescale (diagnostic). As in the
+        # source notebook, this uses the incident XUV photon flux directly.
         time_scale_flow = Hflow / u_launch
         time_scale_recom = np.sqrt(Hflow / (FXUV_photon * alpha))
         time_scale_ratio = time_scale_recom / time_scale_flow
@@ -252,6 +265,9 @@ class MassLoss:
         Momentum balance for the recombination-limited (RL) case.
         RL closure coded is H-specific (uses H recombination to set the base electron density
         and fixes cs=1.2e6 cm s-1.
+
+        Following the original Owen notebook, the RL closure uses the incident XUV
+        photon flux directly rather than a global-mean photon flux.
         """
         G, m_H, alpha_rec = self.params.G, self.params.m_H, self.params.alpha_rec
 
@@ -306,6 +322,27 @@ class MassLoss:
         
         return RXUV_solution, rho_eq, rho_pe
 
+    def compute_mdot_rl(self, RXUV, m_planet, FXUV_photon):
+        """
+        Compute the RL mass-loss rate implied by the H recombination closure
+        used in compare_densities_RL().
+
+        FXUV_photon is the incident photon flux, matching the notebook RL branch.
+        """
+        G, m_H, alpha_rec = self.params.G, self.params.m_H, self.params.alpha_rec
+
+        cs_RL = 1.2e6
+        Hflow = min(RXUV / 3, cs_RL**2 * RXUV**2 / (2 * G * m_planet))
+        nb = np.sqrt(FXUV_photon / (alpha_rec * Hflow))
+
+        Rs_RL = G * m_planet / (2. * cs_RL**2)
+        if RXUV <= Rs_RL:
+            u_RL = FS.get_parker_wind_single(RXUV, cs_RL, Rs_RL)
+        else:
+            u_RL = cs_RL
+
+        return 4.0 * np.pi * RXUV**2 * m_H * nb * u_RL
+
     def compute_mass_loss_parameters(self, m_planet, r_planet, teq, rl_policy='auto', light_major=None):
         """
         rl_policy:
@@ -320,9 +357,11 @@ class MassLoss:
         results = []
         for m_p, r_p, T_eq in zip(m_planet, r_planet, teq):
             try:
-                FXUV = self.params.FXUV
-                E_photon = self.params.E_photon
-                FXUV_photon = FXUV/E_photon
+                # Keep the input convention explicit:
+                # - params.FXUV is the incident stellar XUV energy flux at orbit
+                # - EL converts that to a planet-mean flux internally
+                # - RL/timescale terms use the incident photon flux directly
+                FXUV_photon = self.params.fxuv_photon_incident()
                 G, k_b, m_H = self.params.G, self.params.k_b, self.params.m_H
 
                 # photo layer
@@ -358,8 +397,7 @@ class MassLoss:
                     RXUV_solution_RL, rho_eq_RL, rho_pe_RL = self.find_RXUV_solution_RL(r_p, m_p, rho_bolo, cs_bolo, FXUV_photon)
                     cs_outflow_RL = 1.2e6
                     Rs_RL = G * m_p / (2. * cs_outflow_RL**2)
-                    # Mdot_RL = 4 * np.pi * RXUV_solution_RL**2 * m_H * nb * u_RL
-                    Mdot_RL = self.compute_mdot_only(cs_outflow_RL, RXUV_solution_RL, m_p)
+                    Mdot_RL = self.compute_mdot_rl(RXUV_solution_RL, m_p, FXUV_photon)
 
                     sol.update({'RXUV':RXUV_solution_RL, 'cs':1.2e6, 'Mdot':Mdot_RL,
                                 'RS_flow': Rs_RL, 'rho_eq':rho_eq_RL, 'rho_pe':rho_pe_RL,
@@ -367,6 +405,16 @@ class MassLoss:
 
                 results.append(sol)
                 
+            except SoundSpeedRootError as e:
+                results.append({
+                    'm_planet': m_p, 'r_planet': r_p, 'Teq': T_eq, 'FXUV': self.params.FXUV,
+                    'RXUV': None, 'cs': None, 'Mdot': None,
+                    'regime': 'SKIPPED',
+                    'skip_reason': 'SoundSpeedRootError',
+                    'error': str(e),
+                })
+                continue
+            
             except MomentumBalanceError as e:
                 results.append({'m_planet':m_p, 'r_planet':r_p, 'Teq':T_eq, 'FXUV':self.params.FXUV,
                     'RXUV': None, 'cs': None, 'Mdot': None,

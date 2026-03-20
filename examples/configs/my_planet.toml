@@ -23,35 +23,35 @@ emissivity = 1.0
 
 [xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
 H = 1.89e-18
-O = 5.00e-18
-C = 6.00e-18
-N = 7.00e-18
-S = 1.20e-17
+O = 1.09e-17
+C = 1.01e-17
+N = 1.41e-17
+S = 3.27e-17
 
 [infrared.kappa_cm2_g]            # IR mass opacities kappa (κ) (cm^2 g^-1) for the bolometric region
-H2  = 1.0e-2
+H2  = 1e-2
 H2O = 1.0                         # IR (1–30 µm) Planck-mean-ish at ~1000 K, ~1 bar
-O2  = 2.0e-2
-CO2 = 5.0e-1
-CO  = 1.0e-1
-CH4 = 5.0e-1
-N2  = 1.0e-2
-NH3 = 5.0e-1
-H2S = 8.0e-1
-SO2 = 1.0
-S2  = 2.0e-1
+O2  = 2e-2                        # weak in thermal IR except CIA/quadrupole effects
+CO2 = 5e-1                        # moderate to strong in thermal IR
+CO  = 1e-1                        # weaker as a band-limited mean
+CH4 = 5e-1                        # moderate to strong in thermal IR
+N2  = 1e-2                        # weak in thermal IR except CIA/quadrupole effects
+NH3 = 5e-1                        # moderate to strong in thermal IR
+H2S = 8e-1                        # moderate to strong in thermal IR
+SO2 = 1.0                         # strong in thermal IR
+S2  = 2e-1                        # probably low to moderate
 
 [diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys can be "HO" or "H-O"
 HO = { A=4.8e17, gamma=0.75 }     # Zahnle and Kasting 1986, O loss with background H
-HC = { A=5.5e17, gamma=0.72 }     # H–C slightly faster than H–N/O
-HN = { A=5.0e17, gamma=0.73 }
-HS = { A=4.6e17, gamma=0.72 }     # H–S a touch slower (heavier partner)
-OC = { A=9.0e16, gamma=0.77 }     # heavy–heavy all ~1e17 with small spread
-ON = { A=9.5e16, gamma=0.78 }
-OS = { A=8.5e16, gamma=0.78 }
-CN = { A=8.5e16, gamma=0.76 }
-CS = { A=7.8e16, gamma=0.76 }
-NS = { A=8.0e16, gamma=0.77 }
+HC = { A=1.577e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
+HS = { A=1.539e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
+HN = { A=1.569e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
+OC = { A=5.807e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
+ON = { A=5.566e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
+OS = { A=4.656e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
+CN = { A=5.981e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
+CS = { A=5.146e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
+NS = { A=4.872e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
 
 [fractionation]
 allow_dynamic_light_major = true  # let the code pick the "light major species" automatically

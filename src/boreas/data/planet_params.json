@@ -1,4 +1,5 @@
 {
+    "my_planet": {"radius": 1, "mass": 1, "teq": 300, "FXUV": 1000},
     "TOI-431 b": {"radius": 1.28, "mass": 3.07, "teq": 1862, "FXUV": 70286},
     "TOI-431 d": {"radius": 3.29, "mass": 9.9, "teq": 633, "FXUV": 935},
     "TOI-270 d": {"radius": 2.133, "mass": 4.78, "teq": 370, "FXUV": 0},
@@ -17,5 +18,12 @@
     "TOI 1683.01": {"radius": 2.3, "mass": 8, "teq": 927, "FXUV": 12000},
     "TOI 2076 b": {"radius": 2.52, "mass": 9, "teq": 797, "FXUV": 9500},
     "GJ 3090 b": {"radius": 2.720, "mass": 15.323, "teq": 600, "FXUV": 6000},
-    "my_planet": {"radius": 22.3, "mass": 5.55, "teq": 1300, "FXUV": 1400}
+    "L 98-59 b": {"radius": 0.837, "mass": 0.46, "teq": 620.0, "FXUV": 358.96612},
+    "LHS 1478 b": {"radius": 1.242, "mass": 2.33, "teq": 595.0, "FXUV": 453.135716},
+    "LTT 1445A b": {"radius": 1.34, "mass": 2.73, "teq": 431.0, "FXUV": 114.243115},
+    "GJ 486 b": {"radius": 1.289, "mass": 2.77, "teq": 696.3, "FXUV": 684.684397},
+    "GJ 1132 b": {"radius": 1.192, "mass": 1.84, "teq": 583.8, "FXUV": 624.910351},
+    "LTT 3780 b": {"radius": 1.325, "mass": 2.46, "teq": 903.0, "FXUV": 1996.562631},
+    "TOI-1468 b": {"radius": 1.401, "mass": 3.04, "teq": 683.5, "FXUV": 355.890376},
+    "LHS 1140 c": {"radius": 1.272, "mass": 1.91, "teq": 422.0, "FXUV": 195.527061}
 }

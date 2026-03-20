@@ -1,7 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
 import argparse
-import numpy as np
 
 from boreas.config import load_config_toml
 from boreas import ModelParams, MassLoss, Fractionation

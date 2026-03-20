@@ -4,7 +4,7 @@ class ModelParams:
     Supports preset mixing modes for H2, H2O, CO2, CH4 combinations.
     """
     
-    def __init__(self, E_XUV_eV: float = 20.0):
+    def __init__(self):
         # --- default mode controls ---
         self.FXUV       = 450.0           # erg cm^-2 s^-1 (placeholder default)
 
@@ -86,10 +86,10 @@ class ModelParams:
         self.mmw_SO2    = self.am_s + 2.0*self.am_o     # 64
         self.mmw_S2     = 2.0*self.am_s                 # 64
         
-        # --- opacities in the IR (cm2 g-1) (placeholders) ---
-        self.kappa = {'H2': 1e-2, 'H2O': 1.0, 'O2': 1.0, 'CO2': 1.0,
-                      'CO': 1.0, 'CH4': 1.0, 'N2': 1.0, 'NH3': 1.0,
-                      'H2S': 1.0, 'SO2': 1.0, 'S2': 1.0}
+        # --- opacities in the IR (cm2 g-1); coarse 1-30 um Planck-mean-ish defaults ---
+        self.kappa = {'H2': 1e-2, 'H2O': 1.0, 'O2': 2e-2, 'CO2': 5e-1,
+                      'CO': 1e-1, 'CH4': 5e-1, 'N2': 1e-2, 'NH3': 5e-1,
+                      'H2S': 8e-1, 'SO2': 1.0, 'S2': 2e-1}
 
         # ------------------------------
         # Region B: outflow (fully dissociated) mean molecular weights
@@ -116,26 +116,28 @@ class ModelParams:
         # these mirror the current hard-coded functions.
         self.diffusion_fits = {
             "HO": (4.8e17, 0.75),
+            
             # # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-            # "HC": (2.845e+18, 0.6563),
-            # "HN": (2.829e+18, 0.6563),
-            # "HS": (2.353e+18, 0.6569),
-            # "OC": (8.588e+17, 0.6561),
-            # "ON": (8.231e+17, 0.6561),
-            # "OS": (5.934e+17, 0.6563),
-            # "CN": (7.504e+17, 0.6561),
-            # "CS": (5.609e+17, 0.6562),
-            # "NS": (5.311e+17, 0.6562)
+            # "HC": (2.845e18, 0.6563),
+            # "HN": (2.829e18, 0.6563),
+            # "HS": (2.353e18, 0.6569),
+            # "OC": (8.588e17, 0.6561),
+            # "ON": (8.231e17, 0.6561),
+            # "OS": (5.934e17, 0.6563),
+            # "CN": (7.504e17, 0.6561),
+            # "CS": (5.609e17, 0.6562),
+            # "NS": (5.311e17, 0.6562)
+            
             # Banks+Kockarts 1973 fits
-            "HC": (1.577e+18, 0.5),
-            "HN": (1.569e+18, 0.5),
-            "HS": (1.539e+18, 0.5),
-            "OC": (5.807e+17, 0.5),
-            "ON": (5.566e+17, 0.5),
-            "OS": (4.656e+17, 0.5),
-            "CN": (5.981e+17, 0.5),
-            "CS": (5.146e+17, 0.5),
-            "NS": (4.872e+17, 0.5)
+            "HC": (1.577e18, 0.5),
+            "HN": (1.569e18, 0.5),
+            "HS": (1.539e18, 0.5),
+            "OC": (5.807e17, 0.5),
+            "ON": (5.566e17, 0.5),
+            "OS": (4.656e17, 0.5),
+            "CN": (5.981e17, 0.5),
+            "CS": (5.146e17, 0.5),
+            "NS": (4.872e17, 0.5)
         }
         
         self._warned_pairs = set()
@@ -174,6 +176,18 @@ class ModelParams:
 
     def get_param(self, key, default=None):
         return getattr(self, key, default)
+
+    def fxuv_incident(self):
+        """User/input XUV energy flux at the planet's orbit [erg cm^-2 s^-1]."""
+        return float(self.FXUV)
+
+    def fxuv_global_mean(self):
+        """Planet-mean XUV energy flux, i.e. incident flux divided by 4 for EL bookkeeping."""
+        return 0.25 * self.fxuv_incident()
+
+    def fxuv_photon_incident(self):
+        """Incident stellar XUV photon flux at the planet's orbit [photons cm^-2 s^-1]."""
+        return self.fxuv_incident() / self.E_photon
     
     # --- cross-section and opacity setters ---
     def _init_opacities(self):
