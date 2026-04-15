@@ -91,7 +91,7 @@ class MassLoss:
         """
         G, eta = self.params.G, self.params.eff
         FXUV_mean = self.params.fxuv_global_mean()
-        return eta * 4.0 * np.pi * RXUV**3 / (G * m_planet) * FXUV_mean
+        return eta * FXUV_mean * np.pi * RXUV**3 / (G * m_planet)
 
     def compute_sound_speed(self, RXUV, m_planet):
         """
