@@ -165,8 +165,13 @@ auto_normalize_X = true           # normalize composition if sum!=1
 ```
 
 ### Notes & units
-- FXUV: if you set a number, use stellar irradiance at orbit (erg cm⁻² s⁻¹) (incident flux). If you use "from_data", the value is read from packaged planet_params.json.
-- EL normalization: the model uses the Owen/Schlichting convention with the factor of 4 (absorb over πR², lose over 4πR²). Do not pass a global-mean FXUV (already ÷4), as this is done internally.
+### Notes & units
+- FXUV: always pass the **standard incident flux** `FXUV = L_XUV / (4π a²)` [erg cm⁻² s⁻¹], i.e. the stellar XUV energy flux at the planet's orbit (plain inverse-square law).
+  BOREAS implements the Owen & Schlichting (2024) Eq. 17 energy-limited rate:
+
+      Ṁ_EL = η · F_XUV · π R³_XUV / (4 G M_p)
+
+  The factor of 4 in the denominator — accounting for the planet intercepting flux over cross-section πR²_XUV but losing mass over the full sphere 4πR²_XUV — is built into BOREAS and gives the correct **global** mass-loss rate.
 - Composition: mass fractions of molecules in the bolometric region; outflow is atomic (the code handles the bookkeeping).
 - σ_XUV: atomic photoabsorption cross-sections (cm²).
   Defaults have been calculated after Verner+1996.

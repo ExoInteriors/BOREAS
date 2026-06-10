@@ -14,8 +14,7 @@ class ModelParams:
         self.epsilon    = 1.              # emissivity of planet
         self.alpha_rec  = 2.6e-13         # Recombination coefficient, cm3 s-1
         self.eff        = 0.3             # Mass-loss efficiency factor
-        self.aplau      = 1.              # semi-major axis of the planet
-        
+
         # XUV cross-sections (cm2) per atom assuming neutral species and monochromatic XUV at 20 eV,
         # for computing the mass absorption coefficient in XUV (χ_XUV, cm2 g-1).
         self.sigma_XUV = {'H': 1.89e-18,  # atomic XUV cross-section (of H), cm2
