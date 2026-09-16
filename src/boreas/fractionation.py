@@ -136,7 +136,10 @@ class GeneralizedFractionation:
             'phi': {'H':..., 'C':..., 'N':..., 'O':..., 'S':...},  # NUMBER fluxes
             'x':   {'C':..., 'N':..., 'O':..., 'S':...},           # entrainment fractions (x_i ≡ 1)
             'f':   {'H':..., 'C':..., 'N':..., 'O':..., 'S':...},  # base mixing ratios relative to i
-            'mode': 'energy-limited' or 'diffusion-limited'
+            'mode': 'energy-limited', 'energy-limited (j stalled)' or
+                    'diffusion-limited (j stalled)'
+            'Fmass_in' / 'Fmass_out': supplied vs. actually carried mass flux
+                    (they differ only when the diffusion cap binds)
           }
         """
         p = self.p
@@ -154,14 +157,16 @@ class GeneralizedFractionation:
         # fixed-point loop on x's
         g = self.G * m_planet / (RXUV**2)
         
-        #TODO: add new r0 (mesopause, base of the outflow, Rp<r0<RXUV)
-        # r0 = getattr(self.p, "r0_base", None) or RXUV
-        # g  = self.G * m_planet / (r0**2)
-        # # choose T for diffusion coefficients
-        # mode_f = getattr(self.p, "fractionation_T_mode", "base")
-        # T_outflow = (float(T_outflow) if mode_f=="from_cs"
-        #     else (float(self.p.fractionation_T_fixed) if mode_f=="fixed" and self.p.fractionation_T_fixed
-        #         else float(Teq)))
+        # i-j crossover ("diffusion") limit: the largest i-flux that still leaves j behind.
+        # NOTE (physics, open): the (1 + f_j) factor comes from the i-j *binary* derivation.
+        # Now that light/rare minors are allowed to escape while j stalls, whether this
+        # should become (1 + sum_k f_k x_k) is a modelling call, not a mechanical fix.
+        j_stalled = False
+        if j is not None:
+            b_ij  = p.b_pair(i, j, T_outflow)
+            Fcrit = g * (m[j]-m[i]) * b_ij / ( self.kB * T_outflow * (1.0 + f[j]) ) # cm^-2 s^-1
+        else:
+            b_ij = Fcrit = None
 
         for _ in range(max_iter):
             # effective grams per escaping i-particle in denominator
@@ -171,23 +176,26 @@ class GeneralizedFractionation:
 
             # if we have a heavy major j, update x_j first (Eq. 4)
             if j is not None:
-                b_ij = p.b_pair(i, j, T_outflow)
-                xj_new = 1.0 - ( g * (m[j]-m[i]) * b_ij ) / ( max(Fi,1e-300) * self.kB * T_outflow * (1.0 + f[j]) )
+                if not j_stalled:
+                    xj_new = 1.0 - Fcrit / max(Fi, 1e-300)
+                    if xj_new <= 0.0:
+                        # Heavy major j stalls and stays behind as a static background.
+                        # That does NOT stall the minors: j is picked by abundance, not by
+                        # mass, so minors can be lighter than j (C vs O in any C/O
+                        # atmosphere), and a rare species is cheaper to drag than an
+                        # abundant one anyway (the 1+f_k in its own crossover). Eq. 5 below
+                        # is already correct at x_j = 0, so let the minor loop decide
+                        # instead of zeroing every minor here.
+                        x[j] = 0.0
+                        j_stalled = True
+                    else:
+                        x[j] = self._clamp01(xj_new)
 
-                if xj_new <= 0.0:
-                    # Heavy major j stalls. The actual i-flux is the MIN of EL supply and diffusion limit.
-                    Fcrit  = g * (m[j]-m[i]) * b_ij / ( self.kB * T_outflow * (1.0 + f[j]) )  # cm^-2 s^-1
-                    Fi_EL  = flux_total_mass / m[i]                                           # cm^-2 s^-1 (only i escapes)
-                    phi_i  = Fcrit if (Fcrit < Fi_EL) else Fi_EL
-                    mode   = 'diffusion-limited' if (phi_i is Fcrit) else 'energy-limited (j stalled)'
-
-                    phi = {s: 0.0 for s in species}
-                    phi[i] = phi_i
-                    # x: j and all heavier minors are 0 when j stalls
-                    x_out = {s: (1.0 if s == i else 0.0) for s in species}
-                    return {'i': i, 'j': j, 'phi': phi, 'x': x_out, 'f': f, 'mode': mode}
-
-                x[j] = self._clamp01(xj_new)
+                if j_stalled:
+                    # i has to diffuse through the static j, so its own flux is capped at
+                    # Fcrit. Applied inside the loop as well, so the minors below are
+                    # dragged by the flux i actually has, not by the uncapped EL supply.
+                    Fi = min(Fi, Fcrit)
 
             # update minors (Eq. 5) for all s != i and s != j
             changed = False
@@ -201,7 +209,6 @@ class GeneralizedFractionation:
                 # terms in Eq. 5:
                 base = 1.0 - g * (m[k]-m[i]) * b_ik / ( max(Fi,1e-300) * self.kB * T_outflow )
                 if j is not None:
-                    b_ij = p.b_pair(i, j, T_outflow)
                     b_jk = p.b_pair(j, k, T_outflow)
                     num = base + (b_ik/b_ij)*f[j]*(1.0 - x[j]) + (b_ik/b_jk)*f[j]*x[j]
                     den = 1.0 + (b_ik/b_jk)*f[j]
@@ -220,6 +227,16 @@ class GeneralizedFractionation:
         denom_g_per_i = m[i] + sum(m[s]*f[s]*x.get(s,1.0) for s in species if s != i)
         denom_g_per_i = max(denom_g_per_i, 1e-300)
         Fi = flux_total_mass / denom_g_per_i
+
+        diffusion_limited = False
+        if j_stalled:
+            Fi_EL = Fi                        # what the energy budget alone would supply
+            Fi    = min(Fi, Fcrit)            # diffusion cap through the static j
+            diffusion_limited = (Fi < Fi_EL)  # plain comparison, never identity on floats
+            mode  = 'diffusion-limited (j stalled)' if diffusion_limited else 'energy-limited (j stalled)'
+        else:
+            mode = 'energy-limited'
+
         phi = {s: 0.0 for s in species}
         phi[i] = Fi
         for s in species:
@@ -227,15 +244,21 @@ class GeneralizedFractionation:
                 continue
             phi[s] = Fi * f[s] * x.get(s, 1.0)
 
-        # temporary: mass-flux self-consistency guard
+        # temporary: mass-flux self-consistency guard.
+        # The escaping mass can never exceed the energy budget, and it matches it exactly
+        # unless the diffusion cap binds, in which case part of the budget goes unused.
         Fphi = sum(m[s] * phi.get(s, 0.0) for s in species) # g cm^-2 s^-1
-        rel_err = abs(Fphi - flux_total_mass) / max(flux_total_mass, 1e-300)
+        rel_err = (Fphi - flux_total_mass) / max(flux_total_mass, 1e-300)
         if rel_err > 1e-6:
+            raise RuntimeError(f"Fractionation escapes more mass than supplied: rel_err={rel_err:.3e}")
+        if (not diffusion_limited) and rel_err < -1e-6:
             raise RuntimeError(f"Mass-flux mismatch in fractionation: rel_err={rel_err:.3e}")
+
         # hand back the exact mass flux that was used (for debugging/comparison)
-        result = {'i': i, 'j': j, 'phi': phi, 'x': x, 'f': f, 'mode': 'energy-limited'}
-        result['Fmass_in'] = float(flux_total_mass) # g cm^-2 s^-1
-        
+        result = {'i': i, 'j': j, 'phi': phi, 'x': x, 'f': f, 'mode': mode}
+        result['Fmass_in']  = float(flux_total_mass) # g cm^-2 s^-1, energy-limited supply
+        result['Fmass_out'] = float(Fphi)            # g cm^-2 s^-1, actually carried by phi
+
         return result
 
 # -----------------------------------------
@@ -257,7 +280,8 @@ class Fractionation:
     def execute(self, mass_loss_results, mass_loss, tol=1e-5, max_iter=100, allow_dynamic_light_major=True, forced_light_major='H', debug=False):
         out = []
         for sol in mass_loss_results:
-            if sol.get("regime") == "SKIPPED":
+            if sol.get("regime") in ("SKIPPED", "CPML"):
+                # no usable photoevaporative geometry to fractionate on
                 continue
             Mp, Rp, Teq = sol['m_planet'], sol['r_planet'], sol['Teq']
             mu_eff  = self.params.get_mu_outflow_current()

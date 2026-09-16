@@ -89,6 +89,10 @@ def apply_params_from_config(cfg: Dict[str, Any], params: ModelParams):
         params.beta = float(phys["beta"])
     if "emissivity" in phys:
         params.epsilon = float(phys["emissivity"])
+    if "use_homopause" in phys:
+        params.use_homopause = bool(phys["use_homopause"])
+    if "Kzz_cm2_s" in phys:
+        params.Kzz = float(phys["Kzz_cm2_s"])
     # (alpha_rec left as default unless you *really* want to expose it)
 
     # --- XUV cross-sections (atomic, cm^2) ---

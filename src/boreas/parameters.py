@@ -39,18 +39,24 @@ class ModelParams:
         self.rearth     = 6.371e8         # Earth radius, cm
         self.E_photon   = 20 * 1.6e-12    # Photon energy
         self.k_b        = 1.380649e-16    # Boltzmann constant, erg K^
-        # Atomic masses (in units of hydrogen-atom mass counts)
+        # Integer mass numbers, used only for molecular-weight bookkeeping below
+        # (mmw_H2O = 18, mmw_CO2 = 44, ...). These are counts, not masses.
         self.am_h       = 1.0
         self.am_o       = 16.0
         self.am_c       = 12.0
         self.am_n       = 14.0
         self.am_s       = 32.0
-        # Particle masses (grams)
-        self.m_H        = 1.6735575e-24   # g
-        self.m_O        = self.am_o * self.m_H
-        self.m_C        = self.am_c * self.m_H
-        self.m_N        = self.am_n * self.m_H
-        self.m_S        = self.am_s * self.m_H
+        # Particle masses (grams), from standard atomic weights x the atomic mass unit.
+        # Do NOT build these as am_X * m_H: m_H is the mass of a hydrogen atom
+        # (1.008 amu), not the amu itself, so scaling it by an integer mass number
+        # makes every heavy atom ~0.8% too heavy. These are the same weights the
+        # b_ij diffusion fits were generated with (see tools/gen_diffusion.py).
+        self.amu        = 1.66053906660e-24     # g
+        self.m_H        = 1.008  * self.amu     # 1.6738e-24 g
+        self.m_C        = 12.011 * self.amu
+        self.m_N        = 14.007 * self.amu
+        self.m_O        = 15.999 * self.amu
+        self.m_S        = 32.06  * self.amu
         
         # --- base composition: mass fractions X_* (sum must be 1) ---
         self.X_H2       = 1.0
@@ -112,42 +118,78 @@ class ModelParams:
         self._init_opacities()
         
         # --- default diffusion fits b_ij(T) = A*T**gamma (cm^-1 s^-1) ---
-        # these mirror the current hard-coded functions.
         self.diffusion_fits = {
+            # H-O: Zahnle & Kasting (1986). The only pair with an independent
+            # literature value, and the one the fractionation hinges on.
             "HO": (4.8e17, 0.75),
-            
-            # # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-            # "HC": (2.845e18, 0.6563),
-            # "HN": (2.829e18, 0.6563),
-            # "HS": (2.353e18, 0.6569),
-            # "OC": (8.588e17, 0.6561),
-            # "ON": (8.231e17, 0.6561),
-            # "OS": (5.934e17, 0.6563),
-            # "CN": (7.504e17, 0.6561),
-            # "CS": (5.609e17, 0.6562),
-            # "NS": (5.311e17, 0.6562)
-            
-            # Banks+Kockarts 1973 fits
-            "HC": (1.577e18, 0.5),
-            "HN": (1.569e18, 0.5),
-            "HS": (1.539e18, 0.5),
-            "OC": (5.807e17, 0.5),
-            "ON": (5.566e17, 0.5),
-            "OS": (4.656e17, 0.5),
-            "CN": (5.981e17, 0.5),
-            "CS": (5.146e17, 0.5),
-            "NS": (4.872e17, 0.5)
+
+            # INACTIVE -- rigid sphere (Banks & Kockarts, "Aeronomy" 1973).
+            # Atoms treated as billiard balls of one universal diameter (~3 A), so
+            # the only thing separating one pair from another is the reduced mass:
+            #     b_ij(T) = 1.52e18 * sqrt(1/m_i + 1/m_j) * T**0.5     (m in amu)
+            # The exponent 0.5 is exact for this model, not a fit: mean relative
+            # speed goes as sqrt(T) and the cross-section is constant. Each A below
+            # is just that prefactor with the mass factor folded in.
+            # Retired because this is B&K's fallback for pairs they do not tabulate
+            # and it is too shallow at high T: against the H-O anchor it runs a
+            # factor ~2 low at 3 kK and ~3 low at 10 kK.
+            # "HC": (1.577e18, 0.5),
+            # "HN": (1.569e18, 0.5),
+            # "HS": (1.539e18, 0.5),
+            # "OC": (5.807e17, 0.5),
+            # "ON": (5.566e17, 0.5),
+            # "OS": (4.656e17, 0.5),
+            # "CN": (5.981e17, 0.5),
+            # "CS": (5.146e17, 0.5),
+            # "NS": (4.872e17, 0.5)
+
+            # ACTIVE SET -- Chapman-Enskog, Lennard-Jones 12-6 potential.
+            # Atoms are soft rather than hard: they attract at long range and repel
+            # at short range, so the effective cross-section shrinks as collisions
+            # get more energetic. The exact expression is NOT a power law:
+            #     b_ij(T) = (3/16)*sqrt(2*pi*k*T/mu_ij) / (pi*sigma_ij**2*Omega(T*))
+            # with Omega the collision integral and T* = kT/eps. The values below are
+            # least-squares power-law fits to that curve over 1000-15000 K, where
+            # Omega is deep in its high-T* limit and the curve really is a power law
+            # with gamma = 0.5 + 0.1561 = 0.6561. The S pairs sit a little above that
+            # because Svehla's eps/k = 847 K for sulphur still bites at 1000 K.
+            # sigma/eps are Svehla (1962) atomic values. Regenerate with
+            # tools/gen_diffusion.py, which also prints the fit residuals.
+            # This set is 1.5-2.2x the rigid-sphere one at 3-10 kK and agrees with
+            # the independent H-O anchor to within 30% across 300-15000 K, so it is
+            # the better-supported set in BOREAS's temperature range.
+            # H-O is deliberately NOT taken from here: the measured Zahnle & Kasting
+            # value above is kept for continuity with the escape literature. The two
+            # agree to within 30%, so the set stays internally consistent -- b_HO sits
+            # 1.1-1.4x above b_HC, against 1.7-3.4x under the rigid-sphere set.
+            # "HO": (8.350e17, 0.6561),   # C-E value, superseded by ZK86 above
+            "HC": (8.303e17, 0.6561),
+            "HN": (7.954e17, 0.6561),
+            "HS": (5.261e17, 0.6593),
+            "OC": (2.523e17, 0.6561),
+            "ON": (2.323e17, 0.6562),
+            "OS": (1.212e17, 0.6692),
+            "CN": (2.486e17, 0.6561),
+            "CS": (1.478e17, 0.6585),
+            "NS": (1.274e17, 0.6643)
         }
         
         self._warned_pairs = set()
         
-        self.atomic_y_xuv = None   # optional dict of atomic number fractions at RXUV
+        # --- eddy mixing / homopause controls ---
+        # Homopause: the level where eddy mixing (Kzz) equals molecular diffusion (Dzz).
+        # Below it the atmosphere is well mixed (one scale height for everything); above it
+        # species separate diffusively, which is what the fractionation network assumes.
+        # Purely diagnostic: on by default so every run carries the validity flag, but it
+        # only reports numbers. Nothing downstream (RXUV, Mdot, fractionation) ever uses
+        # the homopause. Set False to drop the homopause keys from the output entirely.
+        self.use_homopause = True
+        self.Kzz = 1.0e8                        # eddy diffusion coefficient, cm^2 s^-1
+        # Dzz(T, n_tot) = A * T**gamma / n_tot, fitted for CH4 in an H2 background and
+        # rescaled to other species by reduced mass (see _homopause_mass_factor).
+        self.D_molecular_fit = (2.2965e17, 0.765)
         
-        #TODO: if r0 is added (mesopause, base of the outflow, different from RXUV)
-        # # misc fractionation params
-        # self.r0_base = None                 # if None, treat r0 ≡ RXUV for now
-        # self.fractionation_T_mode = "base"  # "base" | "from_cs" | "fixed"
-        # self.fractionation_T_fixed = None
+        self.atomic_y_xuv = None   # optional dict of atomic number fractions at RXUV
                 
     # =================================================
     # Basic helpers
@@ -366,34 +408,62 @@ class ModelParams:
     def get_mu_outflow_current(self):
         return self.outflow_from_X(*self.get_X_tuple())
 
-    # --- binary diffusion coefficients b_ij(T) (cm^-1 s^-1) ---
-    # def b_HO(self, T):  return 4.8e17 * (T**0.75)       # Zahnle & Kasting 1986
-    # def b_HC(self, T):  return 2.845e+18 * (T**0.6563)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    # def b_HN(self, T):  return 2.829e+18 * (T**0.6563)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    # def b_HS(self, T):  return 2.353e+18 * (T**0.6569)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    
-    # def b_OC(self, T):  return 8.588e+17 * (T**0.6561)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    # def b_ON(self, T):  return 8.231e+17 * (T**0.6561)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    # def b_OS(self, T):  return 5.934e+17 * (T**0.6563)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    
-    # def b_CN(self, T):  return 7.504e+17 * (T**0.6561)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    # def b_CS(self, T):  return 5.609e+17 * (T**0.6562)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
-    
-    # def b_NS(self, T):  return 5.311e+17 * (T**0.6562)  # Chapman–Enskog neutral–neutral diffusion (LJ 12–6), power-law fit over 1–15 kK
+    # =================================================
+    # Binary diffusion coefficients b_ij(T)  [cm^-1 s^-1]
+    # =================================================
+    # b_ij is the "binary diffusion parameter", b_ij = n * D_ij, where n is the total
+    # number density and D_ij the binary diffusion coefficient. Multiplying by n is what
+    # removes the density dependence (D_ij falls as 1/n, because a denser gas impedes
+    # diffusion), leaving something that depends on temperature alone. It measures how
+    # readily species i and j slide past each other, and in the fractionation network it
+    # sets the critical flux F_crit ~ g*(m_j - m_i)*b_ij / (k*T), i.e. how hard the
+    # escaping light species has to blow to drag the heavy one along.
+    #
+    # These methods are a LEGACY fallback. b_pair() consults self.diffusion_fits first,
+    # and that table covers every pair, so in practice nothing reaches here. Edit the
+    # table, not these; they are kept only so that older configs keep working.
+    #
+    # Two physical pictures are on offer, and they disagree by a factor of ~2 at 3 kK:
+    #
+    #   RIGID SPHERE (Banks & Kockarts, "Aeronomy" 1973) -- active set.
+    #   Atoms are billiard balls of one universal diameter (~3 A). Nothing distinguishes
+    #   one pair from another except how fast the two partners move relative to each
+    #   other, which is fixed by the reduced mass:
+    #       b_ij(T) = 1.52e18 * sqrt(1/m_i + 1/m_j) * T**0.5      (m in amu)
+    #   The exponent 0.5 is exact for this model rather than fitted: mean relative speed
+    #   goes as sqrt(T) and the cross-section never changes. Simple and parameter-free,
+    #   but it is B&K's fallback for pairs they do not tabulate and it is too shallow at
+    #   high T -- a factor ~2 below the H-O anchor at 3 kK, ~3 below it at 10 kK.
+    #
+    #   CHAPMAN-ENSKOG, Lennard-Jones 12-6 (see diffusion_fits for the values).
+    #   Atoms are soft: they attract at long range and repel at short range, so a faster
+    #   collision digs deeper into the repulsive core and the effective cross-section
+    #   shrinks with temperature. That extra shrinkage is why b rises faster than sqrt(T).
+    #   The exact expression is not a power law; the stored values are fits to it over
+    #   1000-15000 K. Regenerate with tools/gen_diffusion.py.
+    #
+    # H-O is the one pair with an independent literature value (Zahnle & Kasting 1986),
+    # so it doubles as the calibration check. Against it, Chapman-Enskog agrees to within
+    # 30% over 300-15000 K while the rigid-sphere form drifts to a factor 3.4 low. Keeping
+    # ZK's H-O alongside rigid-sphere values for the other nine therefore leaves H-O
+    # sitting 1.7-3.4x above its neighbours, which biases O relative to C/N/S in the
+    # fractionation. Switching the whole set to Chapman-Enskog shrinks that to 1.1-1.4x.
 
-    def b_HO(self, T):  return 4.8e17 * (T**0.75)    # Zahnle & Kasting 1986
-    def b_HC(self, T):  return 1.577e+18 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    def b_HN(self, T):  return 1.569e+18 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    def b_HS(self, T):  return 1.539e+18 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    
-    def b_OC(self, T):  return 5.807e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    def b_ON(self, T):  return 5.566e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    def b_OS(self, T):  return 4.656e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    
-    def b_CN(self, T):  return 5.981e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    def b_CS(self, T):  return 5.146e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
-    
-    def b_NS(self, T):  return 4.872e+17 * (T**0.5)  # Banks & Kockarts aeronomy neutral–neutral diffusion (atomic, dissociated gas)
+    # Kept in step with diffusion_fits above so the two can never disagree.
+    def b_HO(self, T):  return 4.8e17   * (T**0.75)    # Zahnle & Kasting 1986
+
+    def b_HC(self, T):  return 8.303e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
+    def b_HN(self, T):  return 7.954e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
+    def b_HS(self, T):  return 5.261e17 * (T**0.6593)  # Chapman-Enskog, LJ 12-6
+
+    def b_OC(self, T):  return 2.523e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
+    def b_ON(self, T):  return 2.323e17 * (T**0.6562)  # Chapman-Enskog, LJ 12-6
+    def b_OS(self, T):  return 1.212e17 * (T**0.6692)  # Chapman-Enskog, LJ 12-6
+
+    def b_CN(self, T):  return 2.486e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
+    def b_CS(self, T):  return 1.478e17 * (T**0.6585)  # Chapman-Enskog, LJ 12-6
+
+    def b_NS(self, T):  return 1.274e17 * (T**0.6643)  # Chapman-Enskog, LJ 12-6
     
     # map species keys to masses (g) and atomic masses (amu-like counts)
     def species_registry(self):
@@ -411,9 +481,12 @@ class ModelParams:
         if a == b:
             return 1e40 # effectively "infinite" to avoid division by ~0 in ratios
 
-        # user/builtin fits table (unordered key)
+        # user/builtin fits table. The table is written light-species-first ("HC", "OC",
+        # "ON"), which is not the same as alphabetical, so look the pair up under both
+        # spellings instead of trusting one convention: sorting alone missed H-C, C-O and
+        # N-O, which then fell through to the legacy methods below.
         k = "".join(sorted([a, b]))
-        fit = self.diffusion_fits.get(k)
+        fit = self.diffusion_fits.get(a + b, self.diffusion_fits.get(b + a))
         if fit:
             A, gamma = fit
             return A * (T ** gamma)
@@ -436,6 +509,76 @@ class ModelParams:
             return (b_aH * b_bH) ** 0.5
         except Exception:
             raise NotImplementedError(f"No diffusion coefficient for pair {a}-{b}. Add it to diffusion_fits or implement b_{a}{b}.")
+
+    # --- molecular diffusion & the homopause ---
+    # The Dzz fit is calibrated on CH4 diffusing through H2; every other pair is reached
+    # by rescaling with the reduced mass, which is the only species information it needs.
+    _HOMOPAUSE_MOLECULES = ["H2", "H2O", "O2", "CO2", "CO", "CH4", "N2", "NH3", "H2S", "SO2", "S2"]
+    _MMW_H2_FIT   = 2.016                           # H2 as used in the published fit
+    _MU_RED_CALIB = 16.04 * 2.016 / 18.059          # the fit's own CH4-H2 reduced mass
+
+    @staticmethod
+    def _reduced_mass(mmw_a, mmw_b):
+        return mmw_a * mmw_b / (mmw_a + mmw_b)
+
+    def _homopause_mass_factor(self, mmw_i, mmw_bg=None):
+        """
+        Reduced-mass rescaling of the CH4-in-H2 diffusion coefficient to the pair (i, bg),
+        i.e. sqrt(mu_red(CH4,H2) / mu_red(i,bg)). Dimensionless, 1 for the calibration pair.
+
+        With mmw_bg = 2.016 this reduces exactly to the published H2-background form
+        sqrt( 16.04/mmw_i * (mmw_i + 2.016)/18.059 ). The calibration reduced mass keeps
+        the published 18.059 denominator rather than 16.04 + 2.016, so the H2-background
+        case is reproduced bit for bit.
+        """
+        if mmw_bg is None:
+            mmw_bg = self._MMW_H2_FIT
+        return (self._MU_RED_CALIB / self._reduced_mass(mmw_i, mmw_bg)) ** 0.5
+
+    def D_molecular(self, T, n_tot, mmw_i, mmw_bg=None):
+        """
+        Binary molecular diffusion coefficient Dzz of molecule i through a background
+        of molecular weight mmw_bg (cm^2 s^-1). mmw_i is the molecular weight of the
+        diffusing species (e.g. 18 for H2O); n_tot is the total number density (cm^-3),
+        i.e. P/(k_B T) for an ideal gas. mmw_bg defaults to H2 (the fit's own background).
+
+        NOTE: only the reduced mass is rescaled. The prefactor still carries the
+        CH4-H2 collision cross-section, so this stays an estimate for other pairs.
+        It depends on the pair only weakly; the strong dependence is the 1/n_tot one.
+        """
+        if mmw_bg is None:
+            mmw_bg = self._MMW_H2_FIT
+        A, gamma = self.D_molecular_fit
+        return A * (T ** gamma) / n_tot * self._homopause_mass_factor(mmw_i, mmw_bg)
+
+    def n_homopause(self, T, mmw_i=None, mmw_bg=None):
+        """
+        Total number density at the homopause (cm^-3), from Kzz = Dzz(T, n_tot).
+        Since Dzz ~ 1/n_tot this inverts directly, no profile needed.
+        """
+        if mmw_i is None:
+            _, mmw_i = self.homopause_molecule()
+        if mmw_bg is None:
+            mmw_bg = self._MMW_H2_FIT
+        A, gamma = self.D_molecular_fit
+        return A * (T ** gamma) * self._homopause_mass_factor(mmw_i, mmw_bg) / self.Kzz
+
+    def homopause_molecule(self, eps=1e-12):
+        """
+        Molecule whose Dzz is evaluated at the homopause: the most abundant one present
+        in the bolometric region. Returns (name, mmw) in hydrogen-atom-mass units.
+
+        Not a user choice. The homopause depends on the species only through the reduced
+        mass, which across the whole H2-to-SO2 range moves it by well under 1% of Rp --
+        far less than the orders of magnitude of uncertainty in Kzz.
+        """
+        mmw = {n: getattr(self, f"mmw_{n}") for n in self._HOMOPAUSE_MOLECULES}
+        X = dict(zip(self._HOMOPAUSE_MOLECULES, self.get_X_tuple()))
+        present = [n for n in self._HOMOPAUSE_MOLECULES if X[n] > eps]
+        if not present:
+            raise ValueError("No molecule present in the bolometric composition.")
+        name = max(present, key=lambda n: X[n])
+        return name, mmw[name]
 
     # --- other helpers ---   
     # to properly read the configs/*.toml files

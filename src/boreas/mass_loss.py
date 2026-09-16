@@ -12,9 +12,32 @@ class MomentumBalanceError(RuntimeError):
 class SoundSpeedRootError(RuntimeError):
     pass
 
+class CorePoweredEscapeError(RuntimeError):
+    def __init__(self, message, *, RS_cold=None, RXUV=None):
+        super().__init__(message)
+        self.RS_cold = RS_cold
+        self.RXUV = RXUV
+
+def _yes_no(flag):
+    """
+    Render a diagnostic boolean as "Yes"/"No" for the result table.
+
+    Every such flag is reported twice: under its own name as a real bool, for code, and
+    under the same name with a "?" appended as this string, for a human reading the CSV.
+    """
+    return "Yes" if flag else "No"
+
+
+# Rows that never reached a solution still carry the Yes/No columns, so a CSV never shows
+# a blank cell that could be misread as "No".
+_FLAGS_NOT_COMPUTED = {'core_powered?': 'n/a', 'homopause_penetrated?': 'n/a'}
+
+
 class MassLoss:
     def __init__(self, params):
         self.params = params
+        self._cpml_warned = set()        # (M, R, Teq) already warned about, to avoid spamming
+        self._homopause_warned = set()   # same, for the homopause-penetrated warning
 
     # --- helper: pick the μ_outflow to use for transport ---
     def _mu_outflow_transport(self):
@@ -343,8 +366,68 @@ class MassLoss:
 
         return 4.0 * np.pi * RXUV**2 * m_H * nb * u_RL
 
-    def compute_mass_loss_parameters(self, m_planet, r_planet, teq, rl_policy='auto', light_major=None):
+    ### Regime-boundary diagnostics ###
+    def compute_cold_sonic_point(self, m_planet, cs_bolo):
         """
+        "Cold" sonic point R_s,cold = G M / (2 cs_bolo^2), i.e. the Bondi radius of the
+        bolometrically heated (T = Teq, molecular) layer.
+
+        This is the companion to the "hot" sonic point RS_flow used in compute_mdot_only(),
+        which is built from the XUV-heated outflow sound speed. RS_flow sitting inside the
+        bolometric region does NOT by itself mean core-powered mass loss; what matters is
+        whether the *cold* sonic point is still outside RXUV. If it is not, the gas is
+        already transonic while it is only bolometrically heated, and the photoevaporative
+        (XUV-launched) closure no longer applies.
+        """
+        return self.params.G * m_planet / (2.0 * cs_bolo**2)
+
+    def compute_homopause(self, r_planet, m_planet, teq, rho_bolo, cs_bolo, mmw_bolo):
+        """
+        Homopause radius: the level where eddy mixing (Kzz) equals molecular diffusion
+        (Dzz), i.e. where the atmosphere starts to be dominated by the lightest gases.
+
+        Below the homopause the atmosphere is well mixed and all species share one scale
+        height; above it species separate diffusively, which is the regime the
+        fractionation network assumes. Kzz = Dzz fixes the total number density directly
+        (Dzz ~ 1/n_tot), and the radius follows from the same isothermal hydrostatic
+        profile used for rho_eq in the momentum balance:
+
+            rho(r) = rho_bolo * exp( G M / cs_bolo^2 * (1/r - 1/Rp) )
+
+        Returns (R_homopause [cm], n_homopause [cm^-3], species). R_homopause is clipped
+        to r_planet when the photosphere is already above the homopause, and is np.inf
+        when the hydrostatic profile never becomes thin enough.
+
+        Diagnostic only, and deliberately so: nothing in BOREAS escapes from, or is
+        evaluated at, the homopause. RXUV stays the base for both the mass-loss rate and
+        the fractionation, which must share one radius -- the flux Mdot/(4 pi R^2), the
+        gravity GM/R^2 and the base mixing ratios all have to be taken at the same level.
+        """
+        G, m_H = self.params.G, self.params.m_H
+
+        species, mmw_i = self.params.homopause_molecule()
+        n_homo = self.params.n_homopause(teq, mmw_i)
+
+        # total number density at the bolometric photosphere (r = Rp)
+        n_bolo = rho_bolo / (mmw_bolo * m_H)
+        if n_homo >= n_bolo:
+            # already diffusively separated at the photosphere
+            return float(r_planet), n_homo, species
+
+        inv_r = 1.0 / r_planet + (cs_bolo**2 / (G * m_planet)) * np.log(n_homo / n_bolo)
+        if inv_r <= 0.0:
+            return np.inf, n_homo, species
+        return 1.0 / inv_r, n_homo, species
+
+    def compute_mass_loss_parameters(self, m_planet, r_planet, teq, rl_policy='auto', light_major=None, cpml_policy='flag'):
+        """
+        cpml_policy: what to do when the cold sonic point falls inside RXUV, i.e. when
+        the flow is core-power limited rather than photoevaporative.
+        'flag'  -> keep the EL/RL numbers, print a warning and set core_powered=True (default)
+        'nan'   -> keep the diagnostics but blank RXUV/cs/Mdot with NaN, regime='CPML'
+        'skip'  -> drop the solution, regime='SKIPPED' with skip_reason='CPML'
+        'raise' -> raise CorePoweredEscapeError
+
         rl_policy:
         'auto'   -> current behavior (enter RL if time_scale_ratio<1)
         'never'  -> never switch to RL (always EL)
@@ -370,6 +453,9 @@ class MassLoss:
                 kappa_bolo = self.params.kappa_p_all
                 # kappa_bolo = np.clip(self.params.kappa_p_all, 1e-3, 10.0) # tune bounds
                 rho_bolo   = G * m_p / r_p**2 / (kappa_bolo * cs_bolo**2)   # the anchor density at r=Rp used to get rho_eq by an isothermal scale height.
+
+                # regime boundary, set by the bolometric layer alone (independent of RXUV)
+                RS_cold = self.compute_cold_sonic_point(m_p, cs_bolo)
 
                 # Energy-limited (EL) regime calculations
                 RXUV_solution_EL, time_scale_ratio, rho_eq_EL, rho_pe_EL = self.find_RXUV_solution_EL(r_p, m_p, rho_bolo, cs_bolo, FXUV_photon)
@@ -403,6 +489,69 @@ class MassLoss:
                                 'RS_flow': Rs_RL, 'rho_eq':rho_eq_RL, 'rho_pe':rho_pe_RL,
                                 'regime':'RL'})
 
+                # --- regime flags ---
+                RXUV_final = sol['RXUV']
+                core_powered = bool(RS_cold <= RXUV_final)
+                sol.update({
+                    'RS_cold': RS_cold,
+                    'core_powered': core_powered,
+                    # Yes -> the cold sonic point is inside RXUV, so the gas is already
+                    # transonic while only bolometrically heated and the reported
+                    # (photoevaporative) Mdot is a placeholder.
+                    'core_powered?': _yes_no(core_powered),
+                    'escape_base': 'RXUV',
+                    'escape_base_radius': RXUV_final,
+                })
+
+                if self.params.use_homopause:
+                    R_homo, n_homo, homo_species = self.compute_homopause(r_p, m_p, T_eq, rho_bolo, cs_bolo, mu_bolo)
+                    # True -> RXUV sits *below* the homopause, i.e. the XUV base is still
+                    # in the well-mixed region. There is then no diffusively separated
+                    # layer beneath it, so the fractionation the network reports at RXUV
+                    # is an upper bound: eddy mixing would resupply the heavy species and
+                    # push the real separation back towards none.
+                    homopause_penetrated = bool(R_homo > RXUV_final)
+                    sol.update({
+                        'R_homopause': R_homo,
+                        'n_homopause': n_homo,
+                        'homopause_species': homo_species,
+                        'Kzz': self.params.Kzz,
+                        'homopause_above_RXUV': homopause_penetrated,
+                        'homopause_penetrated?': _yes_no(homopause_penetrated),
+                    })
+
+                    if homopause_penetrated:
+                        warn_key = (float(m_p), float(r_p), float(T_eq))
+                        if warn_key not in self._homopause_warned:
+                            self._homopause_warned.add(warn_key)
+                            print(f"[BOREAS] homopause penetrated (M={m_p:.3e} g, R={r_p:.3e} cm): "
+                                  f"R_homopause={R_homo:.3e} cm is above RXUV={RXUV_final:.3e} cm, so the XUV "
+                                  f"base still sits in the well-mixed region. Fractionation is computed at RXUV "
+                                  f"regardless and should be read as an upper bound on the true separation "
+                                  f"(Kzz={self.params.Kzz:.3e} cm^2 s^-1 is the dominant uncertainty here)")
+
+                if core_powered:
+                    msg = (f"cold sonic point RS_cold={RS_cold:.3e} cm is inside RXUV={RXUV_final:.3e} cm: "
+                           f"the flow is already transonic in the bolometrically heated region, so this is "
+                           f"core-power limited mass loss. BOREAS has no core-powered prescription yet, so the "
+                           f"reported Mdot is still the photoevaporative one and is a placeholder here")
+                    if cpml_policy == 'raise':
+                        raise CorePoweredEscapeError(msg, RS_cold=RS_cold, RXUV=RXUV_final)
+                    if cpml_policy == 'skip':
+                        sol.update({'FXUV': self.params.FXUV,
+                                    'RXUV': None, 'cs': None, 'Mdot': None,
+                                    'regime': 'SKIPPED', 'skip_reason': 'CPML', 'error': msg})
+                        results.append(sol)
+                        continue
+                    warn_key = (float(m_p), float(r_p), float(T_eq))
+                    if warn_key not in self._cpml_warned:
+                        self._cpml_warned.add(warn_key)
+                        print(f"[BOREAS] core-powered mass loss flagged (M={m_p:.3e} g, R={r_p:.3e} cm): {msg}")
+                    if cpml_policy == 'nan':
+                        sol.update({'RXUV': np.nan, 'cs': np.nan, 'Mdot': np.nan,
+                                    'RS_flow': np.nan, 'regime': 'CPML',
+                                    'escape_base': 'RS_cold', 'escape_base_radius': RS_cold})
+
                 results.append(sol)
                 
             except SoundSpeedRootError as e:
@@ -412,6 +561,7 @@ class MassLoss:
                     'regime': 'SKIPPED',
                     'skip_reason': 'SoundSpeedRootError',
                     'error': str(e),
+                    **_FLAGS_NOT_COMPUTED,
                 })
                 continue
             
@@ -421,6 +571,7 @@ class MassLoss:
                     'regime': 'SKIPPED',
                     'skip_reason': 'EL_momentum_no_root',
                     'error': str(e),
+                    **_FLAGS_NOT_COMPUTED,
                     'EL_min_abs_f': float(e.min_abs_f) if e.min_abs_f is not None else None,
                     'EL_Rbest': float(e.R_best) if e.R_best is not None else None,
                     'EL_Rbest_over_Rp': float(e.R_over_Rp) if e.R_over_Rp is not None else None,
@@ -433,6 +584,7 @@ class MassLoss:
                     'regime': 'SKIPPED',
                     'skip_reason': 'ValueError',
                     'error': str(e),
+                    **_FLAGS_NOT_COMPUTED,
                 })
                 continue
 
