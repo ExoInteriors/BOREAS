@@ -20,6 +20,8 @@ efficiency = 0.30                 # mass loss efficiency eta (η), dimensionless
 albedo     = 0.30
 beta       = 0.75                 # dayside redistribution factor, 0.5<b<1
 emissivity = 1.0
+use_homopause = true              # diagnostic flag only: report the homopause, change nothing
+Kzz_cm2_s     = 1e8               # eddy diffusion coefficient, sets the homopause (Kzz = Dzz)
 
 [xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
 H = 1.89e-18
@@ -43,15 +45,15 @@ S2  = 2e-1                        # probably low to moderate
 
 [diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys can be "HO" or "H-O"
 HO = { A=4.8e17, gamma=0.75 }     # Zahnle and Kasting 1986, O loss with background H
-HC = { A=1.577e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
-HS = { A=1.539e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
-HN = { A=1.569e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
-OC = { A=5.807e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-ON = { A=5.566e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-OS = { A=4.656e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-CN = { A=5.981e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-CS = { A=5.146e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-NS = { A=4.872e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
+HC = { A=8.303e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+HS = { A=5.261e17, gamma=0.6593 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+HN = { A=7.954e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+OC = { A=2.523e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+ON = { A=2.323e17, gamma=0.6562 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+OS = { A=1.212e17, gamma=0.6692 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+CN = { A=2.486e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+CS = { A=1.478e17, gamma=0.6585 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+NS = { A=1.274e17, gamma=0.6643 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
 
 [fractionation]
 allow_dynamic_light_major = true  # let the code pick the "light major species" automatically
