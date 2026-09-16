@@ -1,11 +1,8 @@
 # BOREAS
 
-**BOREAS** is a Python package for modeling **hydrodynamic mass loss** from exoplanet atmospheres,  
-including **energy-limited (EL)** and **recombination-limited (RL)** regimes with
-**multi-species fractionation** among hydrogen (H), oxygen (O), carbon (C), nitrogen (N), and sulfur (S).
+**BOREAS** is a Python package for modeling **hydrodynamic mass loss** from exoplanet atmospheres, including **energy-limited (EL)** and **recombination-limited (RL)** regimes with **multi-species fractionation** among hydrogen (H), oxygen (O), carbon (C), nitrogen (N), and sulfur (S).
 
-The code couples a **molecular bolometric (IR) region** to a **fully dissociated atomic outflow**,  
-tracking composition-dependent escape and diffusive separation self-consistently.
+The code couples a **molecular bolometric (IR) region** to a **fully dissociated atomic outflow**, tracking composition-dependent escape and diffusive separation self-consistently.
 
 > **Package name:** boreas </br>
 > **Import name:** boreas </br>
@@ -34,8 +31,7 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-This installs BOREAS as an editable package (pip install -e .), 
-so any code edits take effect immediately.
+This installs BOREAS as an editable package (pip install -e .), so any code edits take effect immediately.
 
 ## Quick start (run an example)
 
@@ -121,6 +117,8 @@ efficiency = 0.30                 # mass loss efficiency eta (η), dimensionless
 albedo     = 0.30
 beta       = 0.75                 # dayside redistribution factor, 0.5<b<1
 emissivity = 1.0
+use_homopause = true              # diagnostic flag only: report the homopause, change nothing
+Kzz_cm2_s     = 1e8               # eddy diffusion coefficient, sets the homopause (Kzz = Dzz)
 
 [xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
 H = 1.89e-18
@@ -144,15 +142,15 @@ S2  = 2e-1                        # probably low to moderate
 
 [diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys can be "HO" or "H-O"
 HO = { A=4.8e17, gamma=0.75 }     # Zahnle and Kasting 1986, O loss with background H
-HC = { A=1.577e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
-HS = { A=1.539e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
-HN = { A=1.569e18, gamma=0.5 }    # Banks+Kockarts 1973 fits
-OC = { A=5.807e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-ON = { A=5.566e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-OS = { A=4.656e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-CN = { A=5.981e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-CS = { A=5.146e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
-NS = { A=4.872e17, gamma=0.5 }    # Banks+Kockarts 1973 fits
+HC = { A=8.303e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+HS = { A=5.261e17, gamma=0.6593 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+HN = { A=7.954e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+OC = { A=2.523e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+ON = { A=2.323e17, gamma=0.6562 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+OS = { A=1.212e17, gamma=0.6692 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+CN = { A=2.486e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+CS = { A=1.478e17, gamma=0.6585 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
+NS = { A=1.274e17, gamma=0.6643 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
 
 [fractionation]
 allow_dynamic_light_major = true  # let the code pick the "light major species" automatically
@@ -178,25 +176,31 @@ auto_normalize_X = true           # normalize composition if sum!=1
 - κ_IR: IR mass opacities (cm² g⁻¹) for the hydrostatic molecular layer.
   If `[infrared.kappa_cm2_g]` is omitted, BOREAS uses the same coarse 1-30 µm, Planck-mean-ish defaults shown in the example block above.
 - b_ij(T): binary diffusion coefficients in cm⁻¹ s⁻¹; the model uses gram masses and k_B in erg/K consistently.
-  The defaults use H-O from Zahnle & Kasting (1986) and the other pairs from Banks & Kockarts-style atomic neutral-neutral fits.
-  An alternative Chapman-Enskog LJ 12-6 set is left as commented reference values in parameters.py (line 120), but is not exposed as a preset in the example TOMLs.
+  The defaults use H-O from Zahnle & Kasting (1986) and the other nine pairs from Chapman-Enskog theory with a
+  Lennard-Jones 12-6 potential, using Svehla (1962) atomic parameters. The exact Chapman-Enskog expression is not a
+  power law; the stored `A`/`gamma` are least-squares fits to it over 1000-15000 K, accurate to better than 3%
+  (worst case O-S).
+  As a cross-check, this set reproduces the independent Zahnle & Kasting H-O value to within 30% across 300-15000 K.
+  The older Banks & Kockarts rigid-sphere set (`gamma = 0.5` throughout) is retained as commented values in
+  `src/boreas/parameters.py`; it is a factor ~2-3 lower at 3-10 kK and is not exposed as a preset in the example TOMLs.
+  Note that above ~10 kK both routes are extrapolations beyond the range their underlying fits were established on.
+
+## Regime flags: homopause and the cold sonic point
+
+Each solution carries diagnostics for *which level actually throttles the escape*, so an
+EL/RL number can be checked against the assumptions behind it. Nothing here changes the
+computed `Mdot`; they are flags.
+
+Both flags are reported twice. Under their own name they are real booleans, for code
+(`core_powered`, `homopause_above_RXUV`); under the same name with a **`?`** appended they
+are the strings `"Yes"` / `"No"` (`core_powered?`, `homopause_penetrated?`), so a results
+CSV can be read without decoding anything. A row that never reached a solution carries
+`"n/a"` on both rather than a blank cell that could be misread as `"No"`.
 
 ## Built-in planet data
 
 Packaged under boreas.data/planet_params.json (mass [M⊕], radius [R⊕], Teq [K], (incident) FXUV [erg cm⁻² s⁻¹]). </br>
 Use [planet].name = "<key>" to pull those numbers. You can open that JSON to see available keys.
-
-## Running tests (optional but helpful)
-
-```bash
-python -m pip install pytest
-python -m pytest -q
-```
-
-### This runs unit tests that lock in:
-- grams vs amu usage in diffusion/fractionation formulas,
-- diffusion- vs energy-limited branch behavior when heavy species “stall”,
-- well-formed diffusion fits and bounded entrainment fractions.
 
 ## Repo Layout
 
@@ -216,7 +220,8 @@ BOREAS/
 ├─ tests/
 │  ├─ test_choose_light_and_heavy_major.py
 │  ├─ test_consistency_benchmark.py
-│  └─ test_fractionation_units.py
+│  ├─ test_fractionation_units.py
+│  └─ test_homopause_and_cpml.py
 ├─ pyproject.toml
 └─ README.md
 ```
