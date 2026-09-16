@@ -23,6 +23,6 @@ def test_el_target_uses_global_mean_flux_derived_from_incident_input():
     m_planet = 4.2e28
 
     mdot = ml.compute_mdot_el_target(rxuv, m_planet)
-    expected = p.eff * 4.0 * math.pi * rxuv**3 / (p.G * m_planet) * (p.FXUV / 4.0)
+    expected = p.eff * math.pi * rxuv**3 / (p.G * m_planet) * (p.FXUV / 4.0)
 
     assert math.isclose(mdot, expected, rel_tol=1e-12, abs_tol=0.0)
