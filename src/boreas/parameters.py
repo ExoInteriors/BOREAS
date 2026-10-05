@@ -1,3 +1,54 @@
+import re
+
+# =================================================
+# Species tables
+# =================================================
+# Atoms in the fully dissociated outflow, lightest first. This is also the order in
+# which a diffusion pair is spelled ("HHe", "HO", "CO", ...), see pair_key().
+ATOMS = ("H", "He", "C", "N", "O", "S")
+
+# Molecules in the bolometric region, in the order of ModelParams.get_X_tuple().
+MOLECULES = ("H2", "He", "H2O", "O2", "CO2", "CO", "CH4", "N2", "NH3", "H2S", "SO2", "S2")
+
+# How many of each atom one molecule releases when fully dissociated.
+ATOMS_PER_MOLECULE = {
+    "H2":  {"H": 2},
+    "He":  {"He": 1},
+    "H2O": {"H": 2, "O": 1},
+    "O2":  {"O": 2},
+    "CO2": {"C": 1, "O": 2},
+    "CO":  {"C": 1, "O": 1},
+    "CH4": {"C": 1, "H": 4},
+    "N2":  {"N": 2},
+    "NH3": {"N": 1, "H": 3},
+    "H2S": {"H": 2, "S": 1},
+    "SO2": {"S": 1, "O": 2},
+    "S2":  {"S": 2},
+}
+
+_ATOM_BY_UPPER = {a.upper(): a for a in ATOMS}
+_ATOM_TOKEN = re.compile(r"[A-Z][a-z]?")
+
+def canonical_atom(name):
+    """Case-insensitive atom lookup: 'h' -> 'H', 'HE' -> 'He'. KeyError if not in ATOMS."""
+    try:
+        return _ATOM_BY_UPPER[name.upper()]
+    except KeyError:
+        raise KeyError(f"Unknown atom '{name}'. Valid: {list(ATOMS)}") from None
+
+def pair_key(a, b):
+    """The one key a pair is stored under in diffusion_fits: lighter atom first ('HHe', 'CO')."""
+    a, b = sorted((canonical_atom(a), canonical_atom(b)), key=ATOMS.index)
+    return a + b
+
+def split_pair(key):
+    """'HO', 'OH', 'H-O', 'HHe', 'He-O', 'OHe' -> the two atom names, in the order given."""
+    parts = key.split("-") if "-" in key else _ATOM_TOKEN.findall(key)
+    if len(parts) != 2 or ("-" not in key and "".join(parts) != key):
+        raise ValueError(f"Diffusion key '{key}' must name two atoms, like 'HO', 'HHe' or 'He-O'.")
+    return parts
+
+
 class ModelParams:
     """
     Base class for handling model parameters and physical constants.
@@ -26,6 +77,14 @@ class ModelParams:
                         # Verner+1996 fits at 20 eV, but we keep the older value for hydrogen for now,
                         # since the fits are not great near 20 eV and the older value is more commonly used.
                         # 'H': 2.21e-18,
+                        # He: its ionization edge is 24.59 eV, so at 20 eV sigma_He is strictly
+                        # zero and He is transparent. That would leave a He-dominated outflow
+                        # (once H is gone) with nothing to absorb the XUV, while a real spectrum
+                        # is absorbed strongly by He above 24.59 eV. So He is taken at its edge,
+                        # the closest energy to 20 eV at which it absorbs at all. Verner+1996
+                        # He I: E0=13.61 eV, sigma0=949.2 Mb, ya=1.469, P=3.188, yw=2.039,
+                        # y0=0.4434, y1=2.136. Set 0.0 for the strict 20 eV picture.
+                        'He': 7.43e-18,
                         'O': 1.09e-17,
                         'C': 1.01e-17,
                         'N': 1.41e-17,
@@ -42,6 +101,7 @@ class ModelParams:
         # Integer mass numbers, used only for molecular-weight bookkeeping below
         # (mmw_H2O = 18, mmw_CO2 = 44, ...). These are counts, not masses.
         self.am_h       = 1.0
+        self.am_he      = 4.0
         self.am_o       = 16.0
         self.am_c       = 12.0
         self.am_n       = 14.0
@@ -53,6 +113,7 @@ class ModelParams:
         # b_ij diffusion fits were generated with (see tools/gen_diffusion.py).
         self.amu        = 1.66053906660e-24     # g
         self.m_H        = 1.008  * self.amu     # 1.6738e-24 g
+        self.m_He       = 4.0026 * self.amu     # 6.6465e-24 g
         self.m_C        = 12.011 * self.amu
         self.m_N        = 14.007 * self.amu
         self.m_O        = 15.999 * self.amu
@@ -60,6 +121,7 @@ class ModelParams:
         
         # --- base composition: mass fractions X_* (sum must be 1) ---
         self.X_H2       = 1.0
+        self.X_He       = 0.0
         self.X_H2O      = 0.0
         self.X_O2       = 0.0
         self.X_CO2      = 0.0
@@ -80,6 +142,7 @@ class ModelParams:
         # Not fractionated in the escape network, but contributes to μ in the
         # sub-R_XUV, bolometrically heated region.
         self.mmw_H2     = 2.0*self.am_h                 # 2
+        self.mmw_He     = self.am_he                    # 4
         self.mmw_H2O    = 2.0*self.am_h + self.am_o     # 18
         self.mmw_O2     = 2.0*self.am_o                 # 32
         self.mmw_CO2    = self.am_c + 2.0*self.am_o     # 44
@@ -92,7 +155,13 @@ class ModelParams:
         self.mmw_S2     = 2.0*self.am_s                 # 64
         
         # --- opacities in the IR (cm2 g-1); coarse 1-30 um Planck-mean-ish defaults ---
-        self.kappa = {'H2': 1e-2, 'H2O': 1.0, 'O2': 2e-2, 'CO2': 5e-1,
+        # He has no IR bands of its own; its only IR opacity is collision-induced. In an
+        # H2-rich gas a gram of He adds ~0.2-0.4x the H2-H2 CIA per gram behind kappa['H2']:
+        # half as many He atoms per gram as H2 molecules, and an H2-He pair absorbs
+        # ~0.5-1x as much as an H2-H2 pair. He-He CIA is negligible, so a He-dominated
+        # gas is more transparent than this value says.
+        self.kappa = {'H2': 1e-2, 'He': 3e-3,
+                      'H2O': 1.0, 'O2': 2e-2, 'CO2': 5e-1,
                       'CO': 1e-1, 'CH4': 5e-1, 'N2': 1e-2, 'NH3': 5e-1,
                       'H2S': 8e-1, 'SO2': 1.0, 'S2': 2e-1}
 
@@ -102,6 +171,7 @@ class ModelParams:
         # “Outflow” (fully dissociated) per-atom μ for reservoir bookkeeping
         # (mean mass per atom from each molecular reservoir; m_H units)
         self.mmw_H2_outflow  = (2.0*self.am_h)/2.0             # 1
+        self.mmw_He_outflow  = (self.am_he)/1.0                # 4
         self.mmw_H2O_outflow = (2.0*self.am_h+self.am_o)/3.0   # 6
         self.mmw_O2_outflow  = (2.0*self.am_o)/2.0             # 16
         self.mmw_CO2_outflow = (self.am_c+2.0*self.am_o)/3.0   # 44/3
@@ -116,8 +186,38 @@ class ModelParams:
         # --- compute composites & opacities ---
         self._recompute_composites()
         self._init_opacities()
+
+        # --- He diffusion pairs: two sets of b_ij(T) = A*T**gamma (cm^-1 s^-1) ---
+        # "literature" goes into diffusion_fits below; switch with use_he_diffusion_set(name)
+        # or `he_set = "chapman-enskog"` under [diffusion] in a config. diffusion_fits only gets
+        # a copy, so these stay intact for switching back.
+        self.he_diffusion_sets = {
+            # LITERATURE. Converted from the papers' m^-1 s^-1 (x 1e-2).
+            "literature": {
+                # Mason & Marrero (1970), as used by Genda & Ikoma (2008) and Cherubim+ (2024).
+                # Measured, so it anchors the He pairs the way ZK86 anchors H-O.
+                "HHe": (1.04e18, 0.732),
+                # ZK86 H-O rescaled by reduced mass, b ~ mu_ij**-0.5 (Genda & Ikoma 2008
+                # prescription, Cherubim+ 2025 App. C), so these share the H-O anchor in diffusion_fits.
+                "HeC": (2.64e17, 0.75),     # Cherubim+ 2025
+                "HeN": (2.65e17, 0.75),     # same prescription, rescaled from He-O
+                "HeO": (2.61e17, 0.75),     # Cherubim+ 2025
+                "HeS": (2.48e17, 0.75),     # same prescription, rescaled from He-O
+            },
+            # CHAPMAN-ENSKOG, LJ 12-6, Svehla (1962) He: sigma = 2.551 A, eps/k = 10.22 K. Fitted
+            # over 1000-15000 K like the other pairs in diffusion_fits (tools/gen_diffusion.py).
+            "chapman-enskog": {
+                "HHe": (1.305e18, 0.6561),
+                "HeC": (5.383e17, 0.6561),
+                "HeN": (5.096e17, 0.6561),
+                "HeO": (5.311e17, 0.6561),
+                "HeS": (3.287e17, 0.6563),
+            },
+        }
         
         # --- default diffusion fits b_ij(T) = A*T**gamma (cm^-1 s^-1) ---
+        # Keys are spelled lighter atom first (pair_key); b_pair() and set_diffusion_fits()
+        # accept either order, but only the canonical spelling is ever stored.
         self.diffusion_fits = {
             # H-O: Zahnle & Kasting (1986). The only pair with an independent
             # literature value, and the one the fractionation hinges on.
@@ -127,23 +227,18 @@ class ModelParams:
             # Atoms treated as billiard balls of one universal diameter (~3 A), so
             # the only thing separating one pair from another is the reduced mass:
             #     b_ij(T) = 1.52e18 * sqrt(1/m_i + 1/m_j) * T**0.5     (m in amu)
-            # The exponent 0.5 is exact for this model, not a fit: mean relative
-            # speed goes as sqrt(T) and the cross-section is constant. Each A below
-            # is just that prefactor with the mass factor folded in.
-            # Retired because this is B&K's fallback for pairs they do not tabulate
-            # and it is too shallow at high T: against the H-O anchor it runs a
-            # factor ~2 low at 3 kK and ~3 low at 10 kK.
+            # The exponent 0.5 is exact for this model, not a fit
             # "HC": (1.577e18, 0.5),
             # "HN": (1.569e18, 0.5),
             # "HS": (1.539e18, 0.5),
-            # "OC": (5.807e17, 0.5),
-            # "ON": (5.566e17, 0.5),
-            # "OS": (4.656e17, 0.5),
             # "CN": (5.981e17, 0.5),
+            # "CO": (5.807e17, 0.5),
             # "CS": (5.146e17, 0.5),
-            # "NS": (4.872e17, 0.5)
+            # "NO": (5.566e17, 0.5),
+            # "NS": (4.872e17, 0.5),
+            # "OS": (4.656e17, 0.5)
 
-            # ACTIVE SET -- Chapman-Enskog, Lennard-Jones 12-6 potential.
+            # ACTIVE -- Chapman-Enskog, Lennard-Jones 12-6 potential.
             # Atoms are soft rather than hard: they attract at long range and repel
             # at short range, so the effective cross-section shrinks as collisions
             # get more energetic. The exact expression is NOT a power law:
@@ -151,27 +246,20 @@ class ModelParams:
             # with Omega the collision integral and T* = kT/eps. The values below are
             # least-squares power-law fits to that curve over 1000-15000 K, where
             # Omega is deep in its high-T* limit and the curve really is a power law
-            # with gamma = 0.5 + 0.1561 = 0.6561. The S pairs sit a little above that
-            # because Svehla's eps/k = 847 K for sulphur still bites at 1000 K.
-            # sigma/eps are Svehla (1962) atomic values. Regenerate with
-            # tools/gen_diffusion.py, which also prints the fit residuals.
-            # This set is 1.5-2.2x the rigid-sphere one at 3-10 kK and agrees with
-            # the independent H-O anchor to within 30% across 300-15000 K, so it is
-            # the better-supported set in BOREAS's temperature range.
-            # H-O is deliberately NOT taken from here: the measured Zahnle & Kasting
-            # value above is kept for continuity with the escape literature. The two
-            # agree to within 30%, so the set stays internally consistent -- b_HO sits
-            # 1.1-1.4x above b_HC, against 1.7-3.4x under the rigid-sphere set.
-            # "HO": (8.350e17, 0.6561),   # C-E value, superseded by ZK86 above
+            # with gamma = 0.5 + 0.1561 = 0.6561.
+            # "HO": (8.350e17, 0.6561), # C-E value, superseded by ZK86 above
             "HC": (8.303e17, 0.6561),
             "HN": (7.954e17, 0.6561),
             "HS": (5.261e17, 0.6593),
-            "OC": (2.523e17, 0.6561),
-            "ON": (2.323e17, 0.6562),
-            "OS": (1.212e17, 0.6692),
             "CN": (2.486e17, 0.6561),
+            "CO": (2.523e17, 0.6561),
             "CS": (1.478e17, 0.6585),
-            "NS": (1.274e17, 0.6643)
+            "NO": (2.323e17, 0.6562),
+            "NS": (1.274e17, 0.6643),
+            "OS": (1.212e17, 0.6692),
+
+            # He pairs: see he_diffusion_sets above.
+            **self.he_diffusion_sets["literature"],
         }
         
         self._warned_pairs = set()
@@ -180,16 +268,13 @@ class ModelParams:
         # Homopause: the level where eddy mixing (Kzz) equals molecular diffusion (Dzz).
         # Below it the atmosphere is well mixed (one scale height for everything); above it
         # species separate diffusively, which is what the fractionation network assumes.
-        # Purely diagnostic: on by default so every run carries the validity flag, but it
-        # only reports numbers. Nothing downstream (RXUV, Mdot, fractionation) ever uses
-        # the homopause. Set False to drop the homopause keys from the output entirely.
         self.use_homopause = True
-        self.Kzz = 1.0e8                        # eddy diffusion coefficient, cm^2 s^-1
+        self.Kzz = 1.0e8 # eddy diffusion coefficient, cm^2 s^-1
         # Dzz(T, n_tot) = A * T**gamma / n_tot, fitted for CH4 in an H2 background and
         # rescaled to other species by reduced mass (see _homopause_mass_factor).
-        self.D_molecular_fit = (2.2965e17, 0.765)
+        self.D_molecular_fit = (2.2965e17, 0.765) # for CH4 in H2, cm^-1 s^-1
         
-        self.atomic_y_xuv = None   # optional dict of atomic number fractions at RXUV
+        self.atomic_y_xuv = None # optional dict of atomic number fractions at RXUV
                 
     # =================================================
     # Basic helpers
@@ -197,8 +282,10 @@ class ModelParams:
     
     # --- composition ---
     def get_X_tuple(self):
-        return (self.X_H2, self.X_H2O, self.X_O2, self.X_CO2, self.X_CO, self.X_CH4, 
-                self.X_N2, self.X_NH3, self.X_H2S, self.X_SO2, self.X_S2)
+        return tuple(getattr(self, f"X_{mol}") for mol in MOLECULES)
+
+    def get_X_dict(self):
+        return dict(zip(MOLECULES, self.get_X_tuple(), strict=True))
 
     def _check_X_sum(self, tol=1e-8):
         s = self._sum_X()
@@ -233,15 +320,9 @@ class ModelParams:
     # --- cross-section and opacity setters ---
     def _init_opacities(self):
         self._check_X_sum()
-        X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2 = self.get_X_tuple()
-        self.kappa_p_all = (
-            X_H2 * self.kappa['H2']   + X_H2O * self.kappa['H2O'] +
-            X_O2 * self.kappa['O2']   + X_CO2 * self.kappa['CO2'] +
-            X_CO * self.kappa['CO']   + X_CH4 * self.kappa['CH4'] +
-            X_N2 * self.kappa['N2']   + X_NH3 * self.kappa['NH3'] +
-            X_H2S * self.kappa['H2S'] + X_SO2 * self.kappa['SO2'] +
-            X_S2 * self.kappa['S2']
-        )
+        # mass opacities mix linearly in the mass fractions
+        X = self.get_X_dict()
+        self.kappa_p_all = sum(X[mol] * self.kappa[mol] for mol in MOLECULES)
         
     def xuv_cross_section_per_mass(self):
         """
@@ -270,55 +351,25 @@ class ModelParams:
 
             # chi = Σ sigma_i * y_i / (mu m_H)
             chi = 0.0
-            for sp in ("H","C","N","O","S"):
+            for sp in ATOMS:
                 chi += self.sigma_XUV[sp] * yN.get(sp, 0.0)
             chi /= (mu_eff * self.m_H)
-            
+
             return chi # cm^2 g^-1
-            
+
         # ------------------------------------
         # 2) Reservoir fallback
         # ------------------------------------
-        (X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2) = self.get_X_tuple()
-
-        chi = 0.0
-        # H-bearing reservoirs → H atoms
-        if X_H2  > 0: chi += self.sigma_XUV['H'] * X_H2  / (self.mmw_H2_outflow  * self.m_H)
-        if X_H2O > 0: chi += self.sigma_XUV['H'] * X_H2O / (self.mmw_H2O_outflow * self.m_H) * 2.0/3.0 # 2 of 3 atoms are H
-        if X_CH4 > 0: chi += self.sigma_XUV['H'] * X_CH4 / (self.mmw_CH4_outflow * self.m_H) * 4.0/5.0
-        if X_NH3 > 0: chi += self.sigma_XUV['H'] * X_NH3 / (self.mmw_NH3_outflow * self.m_H) * 3.0/4.0
-        if X_H2S > 0: chi += self.sigma_XUV['H'] * X_H2S / (self.mmw_H2S_outflow * self.m_H) * 2.0/3.0
-
-        # O-bearing reservoirs → O atoms
-        if X_H2O > 0: chi += self.sigma_XUV['O'] * X_H2O / (self.mmw_H2O_outflow * self.m_H) * 1.0/3.0
-        if X_O2  > 0: chi += self.sigma_XUV['O'] * X_O2  / (self.mmw_O2_outflow  * self.m_H) * 1.0     # 2/2
-        if X_CO2 > 0: chi += self.sigma_XUV['O'] * X_CO2 / (self.mmw_CO2_outflow * self.m_H) * 2.0/3.0
-        if X_CO  > 0: chi += self.sigma_XUV['O'] * X_CO  / (self.mmw_CO_outflow  * self.m_H) * 1.0/2.0
-        if X_SO2 > 0: chi += self.sigma_XUV['O'] * X_SO2 / (self.mmw_SO2_outflow * self.m_H) * 2.0/3.0
-
-        # C-bearing reservoirs → C atoms
-        if X_CO2 > 0: chi += self.sigma_XUV['C'] * X_CO2 / (self.mmw_CO2_outflow * self.m_H) * 1.0/3.0
-        if X_CO  > 0: chi += self.sigma_XUV['C'] * X_CO  / (self.mmw_CO_outflow  * self.m_H) * 1.0/2.0
-        if X_CH4 > 0: chi += self.sigma_XUV['C'] * X_CH4 / (self.mmw_CH4_outflow * self.m_H) * 1.0/5.0
-
-        # N-bearing reservoirs → N atoms
-        if X_N2  > 0: chi += self.sigma_XUV['N'] * X_N2  / (self.mmw_N2_outflow  * self.m_H) * 1.0     # 2/2
-        if X_NH3 > 0: chi += self.sigma_XUV['N'] * X_NH3 / (self.mmw_NH3_outflow * self.m_H) * 1.0/4.0
-
-        # S-bearing reservoirs → S atoms
-        if X_H2S > 0: chi += self.sigma_XUV['S'] * X_H2S / (self.mmw_H2S_outflow * self.m_H) * 1.0/3.0
-        if X_SO2 > 0: chi += self.sigma_XUV['S'] * X_SO2 / (self.mmw_SO2_outflow * self.m_H) * 1.0/3.0
-        if X_S2  > 0: chi += self.sigma_XUV['S'] * X_S2  / (self.mmw_S2_outflow  * self.m_H) * 1.0     # 2/2
+        # chi = Σ sigma_atom * (atoms per gram), with the atoms counted from each reservoir
+        N = self.atomic_counts()
+        chi = sum(self.sigma_XUV[sp] * N[sp] for sp in ATOMS) / self.m_H
 
         return chi # cm^2 g^-1
-    
+
     def set_sigma_XUV(self, mapping: dict):
-        """Override atomic sigma_XUV (cm^2). Keys case-insensitive among H,C,N,O,S."""
+        """Override atomic sigma_XUV (cm^2). Keys case-insensitive among H, He, C, N, O, S."""
         for k, v in mapping.items():
-            key = k.upper()
-            if key not in self.sigma_XUV:
-                raise KeyError(f"Unknown sigma_XUV species '{k}'. Valid: {list(self.sigma_XUV)}")
-            self.sigma_XUV[key] = float(v)
+            self.sigma_XUV[canonical_atom(k)] = float(v)
 
     def set_kappa(self, mapping: dict):
         """Override IR κ (cm^2 g^-1) per molecule."""
@@ -330,79 +381,41 @@ class ModelParams:
 
     # --- mu (bolometric) & reservoir bookkeeping ---
     def _recompute_composites(self):
-        X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2 = self.get_X_tuple()
         self._check_X_sum()
-        self.mmw_bolometric_all = (
-            X_H2  * self.mmw_H2  + X_H2O * self.mmw_H2O + X_O2  * self.mmw_O2 +     # O and H species
-            X_CO2 * self.mmw_CO2 + X_CO  * self.mmw_CO  + X_CH4 * self.mmw_CH4 +    # C species
-            X_N2  * self.mmw_N2  + X_NH3 * self.mmw_NH3 +                           # N species
-            X_H2S * self.mmw_H2S + X_SO2 * self.mmw_SO2 + X_S2  * self.mmw_S2       # S species
-        )
+        X = self.get_X_dict()
+        self.mmw_bolometric_all = sum(X[mol] * getattr(self, f"mmw_{mol}") for mol in MOLECULES)
 
     def get_mmw_bolometric(self):
         return self.mmw_bolometric_all
 
-    def mixing_ratios_H_O_C_N_S(self, *X):
-        # Atomic mixing ratios at the base of the flow (fully dissociated,
-        # per H atom), not volume mixing ratios of intact molecules.
-        (X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2) = X
-        
-        # particle numbers per unit bulk mass from each reservoir
-        # OR atoms per bulk mass from each reservoir (up to a constant 1/m_H)
-        N_H2  = X_H2  / self.mmw_H2_outflow   if X_H2  > 0 else 0.0
-        N_H2O = X_H2O / self.mmw_H2O_outflow  if X_H2O > 0 else 0.0
-        N_O2  = X_O2  / self.mmw_O2_outflow   if X_O2  > 0 else 0.0
-        N_CO2 = X_CO2 / self.mmw_CO2_outflow  if X_CO2 > 0 else 0.0
-        N_CO  = X_CO  / self.mmw_CO_outflow   if X_CO  > 0 else 0.0
-        N_CH4 = X_CH4 / self.mmw_CH4_outflow  if X_CH4 > 0 else 0.0
-        N_N2  = X_N2  / self.mmw_N2_outflow   if X_N2  > 0 else 0.0
-        N_NH3 = X_NH3 / self.mmw_NH3_outflow  if X_NH3 > 0 else 0.0
-        N_H2S = X_H2S / self.mmw_H2S_outflow  if X_H2S > 0 else 0.0
-        N_SO2 = X_SO2 / self.mmw_SO2_outflow  if X_SO2 > 0 else 0.0
-        N_S2  = X_S2  / self.mmw_S2_outflow   if X_S2  > 0 else 0.0
-
-        # element atom counts per bulk mass
-        N_H = (2.0/2.0)*N_H2  + (2.0/3.0)*N_H2O + (4.0/5.0)*N_CH4 + (3.0/4.0)*N_NH3 + (2.0/3.0)*N_H2S
-        N_O = (1.0/3.0)*N_H2O + 1.0*N_O2        + (2.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (2.0/3.0)*N_SO2
-        N_C = (1.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (1.0/5.0)*N_CH4
-        N_N = 1.0*N_N2        + (1.0/4.0)*N_NH3
-        N_S = (1/3)*N_H2S     + (1.0/3.0)*N_SO2 + 1.0*N_S2
-
-        # mixing ratios relative to H from Odert et al. 2018
-        if N_H <= 0.0:
-            return 0.0, 0.0, 0.0, 0.0
-        f_O = N_O / N_H
-        f_C = N_C / N_H
-        f_N = N_N / N_H
-        f_S = N_S / N_H
-        return f_O, f_C, f_N, f_S
+    def atomic_counts(self, X=None):
+        """
+        Atoms of each element per unit bulk mass at the base of the flow, fully dissociated
+        (up to a constant 1/m_H). Returns {atom: N} for every atom in ATOMS. X is a
+        composition tuple in MOLECULES order and defaults to the current one.
+        """
+        X = self.get_X_tuple() if X is None else X
+        N = dict.fromkeys(ATOMS, 0.0)
+        for mol, X_mol in zip(MOLECULES, X, strict=True):
+            if X_mol <= 0.0:
+                continue
+            # particles per bulk mass from this reservoir, then split by its stoichiometry
+            # (e.g. 2 of the 3 atoms in H2O are H)
+            N_mol   = X_mol / getattr(self, f"mmw_{mol}_outflow")
+            atoms   = ATOMS_PER_MOLECULE[mol]
+            n_atoms = sum(atoms.values())
+            for atom, k in atoms.items():
+                N[atom] += N_mol * k / n_atoms
+        return N
 
     def outflow_from_X(self, *X):
-        (X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2) = X
-        
-        N_H2  = X_H2  / self.mmw_H2_outflow   if X_H2  > 0 else 0.0
-        N_H2O = X_H2O / self.mmw_H2O_outflow  if X_H2O > 0 else 0.0
-        N_O2  = X_O2  / self.mmw_O2_outflow   if X_O2  > 0 else 0.0
-        N_CO2 = X_CO2 / self.mmw_CO2_outflow  if X_CO2 > 0 else 0.0
-        N_CO  = X_CO  / self.mmw_CO_outflow   if X_CO  > 0 else 0.0
-        N_CH4 = X_CH4 / self.mmw_CH4_outflow  if X_CH4 > 0 else 0.0
-        N_N2  = X_N2  / self.mmw_N2_outflow   if X_N2  > 0 else 0.0
-        N_NH3 = X_NH3 / self.mmw_NH3_outflow  if X_NH3 > 0 else 0.0
-        N_H2S = X_H2S / self.mmw_H2S_outflow  if X_H2S > 0 else 0.0
-        N_SO2 = X_SO2 / self.mmw_SO2_outflow  if X_SO2 > 0 else 0.0
-        N_S2  = X_S2  / self.mmw_S2_outflow   if X_S2  > 0 else 0.0
-        
-        N_H = (2.0/2.0)*N_H2  + (2.0/3.0)*N_H2O + (4.0/5.0)*N_CH4 + (3.0/4.0)*N_NH3 + (2.0/3.0)*N_H2S
-        N_O = (1.0/3.0)*N_H2O + 1.0*N_O2        + (2.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (2.0/3.0)*N_SO2
-        N_C = (1.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (1.0/5.0)*N_CH4
-        N_N = (2.0/2.0)*N_N2  + (1.0/4.0)*N_NH3
-        N_S = (1/3)*N_H2S     + (1.0/3.0)*N_SO2 + 1.0*N_S2
-        
-        N_tot = N_H + N_O + N_C + N_N + N_S
-        
+        N = self.atomic_counts(X)
+        N_tot = sum(N.values())
+
         if N_tot <= 0.0:
             return 1.0
-        mean_mass = (self.m_H*N_H + self.m_O*N_O + self.m_C*N_C + self.m_N*N_N + self.m_S*N_S) / N_tot
+        reg = self.species_registry()
+        mean_mass = sum(reg[sp]['m'] * N[sp] for sp in ATOMS) / N_tot
         return mean_mass / self.m_H
 
     def get_mu_outflow_current(self):
@@ -419,29 +432,6 @@ class ModelParams:
     # sets the critical flux F_crit ~ g*(m_j - m_i)*b_ij / (k*T), i.e. how hard the
     # escaping light species has to blow to drag the heavy one along.
     #
-    # These methods are a LEGACY fallback. b_pair() consults self.diffusion_fits first,
-    # and that table covers every pair, so in practice nothing reaches here. Edit the
-    # table, not these; they are kept only so that older configs keep working.
-    #
-    # Two physical pictures are on offer, and they disagree by a factor of ~2 at 3 kK:
-    #
-    #   RIGID SPHERE (Banks & Kockarts, "Aeronomy" 1973) -- active set.
-    #   Atoms are billiard balls of one universal diameter (~3 A). Nothing distinguishes
-    #   one pair from another except how fast the two partners move relative to each
-    #   other, which is fixed by the reduced mass:
-    #       b_ij(T) = 1.52e18 * sqrt(1/m_i + 1/m_j) * T**0.5      (m in amu)
-    #   The exponent 0.5 is exact for this model rather than fitted: mean relative speed
-    #   goes as sqrt(T) and the cross-section never changes. Simple and parameter-free,
-    #   but it is B&K's fallback for pairs they do not tabulate and it is too shallow at
-    #   high T -- a factor ~2 below the H-O anchor at 3 kK, ~3 below it at 10 kK.
-    #
-    #   CHAPMAN-ENSKOG, Lennard-Jones 12-6 (see diffusion_fits for the values).
-    #   Atoms are soft: they attract at long range and repel at short range, so a faster
-    #   collision digs deeper into the repulsive core and the effective cross-section
-    #   shrinks with temperature. That extra shrinkage is why b rises faster than sqrt(T).
-    #   The exact expression is not a power law; the stored values are fits to it over
-    #   1000-15000 K. Regenerate with tools/gen_diffusion.py.
-    #
     # H-O is the one pair with an independent literature value (Zahnle & Kasting 1986),
     # so it doubles as the calibration check. Against it, Chapman-Enskog agrees to within
     # 30% over 300-15000 K while the rigid-sphere form drifts to a factor 3.4 low. Keeping
@@ -449,26 +439,11 @@ class ModelParams:
     # sitting 1.7-3.4x above its neighbours, which biases O relative to C/N/S in the
     # fractionation. Switching the whole set to Chapman-Enskog shrinks that to 1.1-1.4x.
 
-    # Kept in step with diffusion_fits above so the two can never disagree.
-    def b_HO(self, T):  return 4.8e17   * (T**0.75)    # Zahnle & Kasting 1986
-
-    def b_HC(self, T):  return 8.303e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
-    def b_HN(self, T):  return 7.954e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
-    def b_HS(self, T):  return 5.261e17 * (T**0.6593)  # Chapman-Enskog, LJ 12-6
-
-    def b_OC(self, T):  return 2.523e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
-    def b_ON(self, T):  return 2.323e17 * (T**0.6562)  # Chapman-Enskog, LJ 12-6
-    def b_OS(self, T):  return 1.212e17 * (T**0.6692)  # Chapman-Enskog, LJ 12-6
-
-    def b_CN(self, T):  return 2.486e17 * (T**0.6561)  # Chapman-Enskog, LJ 12-6
-    def b_CS(self, T):  return 1.478e17 * (T**0.6585)  # Chapman-Enskog, LJ 12-6
-
-    def b_NS(self, T):  return 1.274e17 * (T**0.6643)  # Chapman-Enskog, LJ 12-6
-    
     # map species keys to masses (g) and atomic masses (amu-like counts)
     def species_registry(self):
         return {
             'H': {'m': self.m_H, 'A': self.am_h},
+            'He': {'m': self.m_He, 'A': self.am_he},
             'O': {'m': self.m_O, 'A': self.am_o},
             'C': {'m': self.m_C, 'A': self.am_c},
             'N': {'m': self.m_N, 'A': self.am_n},
@@ -476,44 +451,32 @@ class ModelParams:
         }
 
     def b_pair(self, a, b, T):
-        """Return b_ij(T) (cm^-1 s^-1) using, in order: user fits, built-ins, symmetry, or geometric mean fallback."""
-        a = a.upper(); b = b.upper()
+        """Return b_ij(T) (cm^-1 s^-1) from diffusion_fits, or a geometric mean via H for a pair missing from it."""
+        a, b = canonical_atom(a), canonical_atom(b)
         if a == b:
             return 1e40 # effectively "infinite" to avoid division by ~0 in ratios
 
-        # user/builtin fits table. The table is written light-species-first ("HC", "OC",
-        # "ON"), which is not the same as alphabetical, so look the pair up under both
-        # spellings instead of trusting one convention: sorting alone missed H-C, C-O and
-        # N-O, which then fell through to the legacy methods below.
-        k = "".join(sorted([a, b]))
-        fit = self.diffusion_fits.get(a + b, self.diffusion_fits.get(b + a))
+        # one canonical spelling per pair (pair_key), so the lookup is order-independent
+        k = pair_key(a, b)
+        fit = self.diffusion_fits.get(k)
         if fit:
             A, gamma = fit
             return A * (T ** gamma)
 
-        # legacy hard-coded methods
-        name = f"b_{a}{b}"
-        if hasattr(self, name):
-            return getattr(self, name)(T)
-        name_sym = f"b_{b}{a}"
-        if hasattr(self, name_sym):
-            return getattr(self, name_sym)(T)
-
-        # geometric-mean fallback via H
-        try:
-            b_aH = self.b_pair(a, 'H', T)
-            b_bH = self.b_pair(b, 'H', T)
-            if k not in self._warned_pairs:
-                print(f"[b_pair] Using geometric-mean fallback for {a}-{b}")
-                self._warned_pairs.add(k)
-            return (b_aH * b_bH) ** 0.5
-        except Exception:
-            raise NotImplementedError(f"No diffusion coefficient for pair {a}-{b}. Add it to diffusion_fits or implement b_{a}{b}.")
+        # geometric-mean fallback via H. The default table covers every pair, so this is
+        # reached only if a pair was removed from it by hand.
+        if 'H' in (a, b):
+            raise NotImplementedError(f"No diffusion coefficient for pair {a}-{b}. Add it to diffusion_fits.")
+        b_aH = self.b_pair(a, 'H', T)
+        b_bH = self.b_pair(b, 'H', T)
+        if k not in self._warned_pairs:
+            print(f"[b_pair] Using geometric-mean fallback for {a}-{b}")
+            self._warned_pairs.add(k)
+        return (b_aH * b_bH) ** 0.5
 
     # --- molecular diffusion & the homopause ---
     # The Dzz fit is calibrated on CH4 diffusing through H2; every other pair is reached
     # by rescaling with the reduced mass, which is the only species information it needs.
-    _HOMOPAUSE_MOLECULES = ["H2", "H2O", "O2", "CO2", "CO", "CH4", "N2", "NH3", "H2S", "SO2", "S2"]
     _MMW_H2_FIT   = 2.016                           # H2 as used in the published fit
     _MU_RED_CALIB = 16.04 * 2.016 / 18.059          # the fit's own CH4-H2 reduced mass
 
@@ -572,9 +535,9 @@ class ModelParams:
         mass, which across the whole H2-to-SO2 range moves it by well under 1% of Rp --
         far less than the orders of magnitude of uncertainty in Kzz.
         """
-        mmw = {n: getattr(self, f"mmw_{n}") for n in self._HOMOPAUSE_MOLECULES}
-        X = dict(zip(self._HOMOPAUSE_MOLECULES, self.get_X_tuple()))
-        present = [n for n in self._HOMOPAUSE_MOLECULES if X[n] > eps]
+        mmw = {n: getattr(self, f"mmw_{n}") for n in MOLECULES}
+        X = self.get_X_dict()
+        present = [n for n in MOLECULES if X[n] > eps]
         if not present:
             raise ValueError("No molecule present in the bolometric composition.")
         name = max(present, key=lambda n: X[n])
@@ -585,18 +548,21 @@ class ModelParams:
     def set_composition(self, mapping: dict, auto_normalize: bool = True):
         """
         Set all mass fractions X_* in one shot.
-        mapping keys: H2, H2O, O2, CO2, CO, CH4, N2, NH3, H2S, SO2, S2
-        Unspecified species default to 0.0.
+        mapping keys: any of MOLECULES (H2, He, H2O, O2, CO2, CO, CH4, N2, NH3, H2S, SO2, S2)
+        Unspecified species default to 0.0; an unknown key raises, so a typo such as
+        'HE' cannot silently drop a species.
         If auto_normalize=True, values are rescaled to sum to 1.
         If auto_normalize is None, use self.auto_normalize_X.
         """
         if auto_normalize is None:
             auto_normalize = self.auto_normalize_X
-        
-        allowed = ["H2","H2O","O2","CO2","CO","CH4","N2","NH3","H2S","SO2","S2"]
+
+        unknown = sorted(set(mapping) - set(MOLECULES))
+        if unknown:
+            raise KeyError(f"Unknown composition species {unknown}. Valid: {list(MOLECULES)}")
 
         # collect values, defaulting missing ones to 0
-        Xvals = {f"X_{sp}": float(mapping.get(sp, 0.0)) for sp in allowed}
+        Xvals = {f"X_{sp}": float(mapping.get(sp, 0.0)) for sp in MOLECULES}
         s = sum(Xvals.values())
 
         if auto_normalize:
@@ -626,10 +592,8 @@ class ModelParams:
         if s <= 0.0:
             raise ValueError("All composition mass fractions are zero; cannot normalize.")
         scale = 1.0 / s
-        (self.X_H2, self.X_H2O, self.X_O2, self.X_CO2, self.X_CO, self.X_CH4,
-        self.X_N2, self.X_NH3, self.X_H2S, self.X_SO2, self.X_S2) = [
-            x * scale for x in self.get_X_tuple()
-        ]
+        for mol, x in self.get_X_dict().items():
+            setattr(self, f"X_{mol}", x * scale)
         if not self._norm_warned_once:
             print(f"[composition] Auto-normalized mass fractions (sum={s:.6f} → 1.0).")
             self._norm_warned_once = True
@@ -640,19 +604,20 @@ class ModelParams:
 
     def set_diffusion_fits(self, mapping: dict):
         """
-        mapping: {"HO": {"A":..., "gamma":...}, "H-O": {...}, ...}
-        Keys can be 'HO', 'OH', 'H-O', or 'O-H'. Stored as unhyphenated, orderless.
+        mapping: {"HO": {"A":..., "gamma":...}, "H-He": {...}, ...}
+        Keys name two atoms in either order: 'HO', 'OH', 'H-O', 'HHe', 'He-O', 'OHe'.
+        Stored under the canonical pair_key, so an override always replaces the default
+        rather than sitting next to it under the other spelling.
         """
-        def norm_key(key: str) -> str:
-            key = key.replace("-", "").upper()
-            if len(key) != 2:
-                raise ValueError(f"Diffusion key '{key}' must be a 2-letter pair like 'HO'.")
-            a, b = key[0], key[1]
-            if a == b:
-                raise ValueError("Self-diffusion pairs (e.g., 'HH') are not valid here.")
-            # store unordered to auto-symmetrize
-            return "".join(sorted([a, b]))
         for k, spec in mapping.items():
+            a, b = split_pair(k)
+            if canonical_atom(a) == canonical_atom(b):
+                raise ValueError("Self-diffusion pairs (e.g., 'HH') are not valid here.")
             A = float(spec["A"]); gamma = float(spec["gamma"])
-            kN = norm_key(k)
-            self.diffusion_fits[kN] = (A, gamma)
+            self.diffusion_fits[pair_key(a, b)] = (A, gamma)
+
+    def use_he_diffusion_set(self, name: str):
+        """Switch every He pair in diffusion_fits to one of he_diffusion_sets ('literature' or 'chapman-enskog')."""
+        if name not in self.he_diffusion_sets:
+            raise KeyError(f"Unknown He diffusion set '{name}'. Valid: {list(self.he_diffusion_sets)}")
+        self.diffusion_fits.update(self.he_diffusion_sets[name])

@@ -3,8 +3,9 @@ name           = "my_planet"     # look up mass(grams)/radius(cm)/Teq(K) in pack
 FXUV_erg_cm2_s = "from_data"     # "from_data" to read .json value, or input value. Incident XUV (energy flux), or stellar irradiance at the planet’s orbit, ergs cm-2 s-1
 
 [composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
-H2  = 0.9
-H2O = 0.1
+H2  = 0.8
+He  = 0.17
+H2O = 0.03
 O2  = 0
 CO2 = 0
 CO  = 0
@@ -25,6 +26,7 @@ Kzz_cm2_s     = 1e8               # eddy diffusion coefficient, sets the homopau
 
 [xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
 H = 1.89e-18
+He = 7.43e-18                     # at its 24.59 eV edge: He cannot absorb at 20 eV (0 there)
 O = 1.09e-17
 C = 1.01e-17
 N = 1.41e-17
@@ -32,6 +34,7 @@ S = 3.27e-17
 
 [infrared.kappa_cm2_g]            # IR mass opacities kappa (κ) (cm^2 g^-1) for the bolometric region
 H2  = 1e-2
+He  = 3e-3                        # collision-induced only (H2-He); He-He is negligible
 H2O = 1.0                         # IR (1–30 µm) Planck-mean-ish at ~1000 K, ~1 bar
 O2  = 2e-2                        # weak in thermal IR except CIA/quadrupole effects
 CO2 = 5e-1                        # moderate to strong in thermal IR
@@ -43,7 +46,10 @@ H2S = 8e-1                        # moderate to strong in thermal IR
 SO2 = 1.0                         # strong in thermal IR
 S2  = 2e-1                        # probably low to moderate
 
-[diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys can be "HO" or "H-O"
+[diffusion]
+he_set = "literature"             # He pairs: "literature" (Mason & Marrero 1970; Cherubim+ 2024, 2025) or "chapman-enskog"
+
+[diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys "HO", "H-O", "HHe" or "He-O", either order; overrides he_set
 HO = { A=4.8e17, gamma=0.75 }     # Zahnle and Kasting 1986, O loss with background H
 HC = { A=8.303e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
 HS = { A=5.261e17, gamma=0.6593 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK

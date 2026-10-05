@@ -92,7 +92,10 @@ class MassLoss:
 
         # mass absorption coefficient at XUV for mixtures
         chi_xuv = self.params.xuv_cross_section_per_mass()          # mass absorption coefficient at XUV for mixtures
-        
+        if not chi_xuv > 0.0:
+            # e.g. a pure-He outflow with sigma_XUV['He'] = 0: nothing absorbs, so there is no XUV base
+            raise ValueError(f"chi_XUV = {chi_xuv}: nothing in the outflow absorbs the XUV, check sigma_XUV")
+
         # base density at RXUV from XUV absorption
         # rho_s = 1.0 / ((sigma / (mmw_outflow * m_H/2.)) * tau)    # for H2 (+-He) envelopes
         # rho_s = 1.0 / ((sigma / (mmw_outflow * m_H)) * tau)       # do not divide m_H/2, per oxygen atom

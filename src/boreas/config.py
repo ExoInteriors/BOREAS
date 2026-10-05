@@ -12,9 +12,6 @@ try:
 except ModuleNotFoundError:
     import tomli as _toml     # py 3.9–3.10
 
-_COMPOSITION_KEYS = ["H2","H2O","O2","CO2","CO","CH4","N2","NH3","H2S","SO2","S2"]
-_XATTR = {name: f"X_{name}" for name in _COMPOSITION_KEYS}
-
 def load_config_toml(path: str) -> Dict[str, Any]:
     with open(path, "rb") as f:
         return _toml.load(f)
@@ -106,7 +103,12 @@ def apply_params_from_config(cfg: Dict[str, Any], params: ModelParams):
         params.set_kappa(kap)
 
     # --- diffusion fits: b_ij(T) = A T^gamma ---
-    # Accept "HO" or "H-O" keys
+    # The He pairs come as a set ("literature" or "chapman-enskog"); [diffusion.b] is
+    # applied after it, so a single pair listed there still overrides the set.
+    he_set = cfg.get("diffusion", {}).get("he_set")
+    if he_set:
+        params.use_he_diffusion_set(str(he_set))
+    # Accept "HO", "H-O", "HHe" or "He-O" keys, in either order
     diff = cfg.get("diffusion", {}).get("b", {})
     if diff:
         params.set_diffusion_fits(diff)

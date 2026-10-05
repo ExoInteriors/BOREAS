@@ -59,15 +59,15 @@ def main(cfg_path: Path, verbose: bool = False):
     print("Regime:", r0.get("regime"), ", RXUV[cm]:", r0.get("RXUV"), ", Mdot[g/s]:", r0.get("Mdot"))
     print("light_major:", r0.get("light_major_i"), ", heavy_major:", r0.get("heavy_major_j"))
     print("T_outflow[K]:", r0.get("T_outflow"), ", mu_outflow:", r0.get("mmw_outflow"))
-    print("phi_H_num:", r0.get("phi_H_num"), ", phi_O_num", r0.get("phi_O_num"), ", phi_C_num",  r0.get("phi_C_num"), ", phi_N_num",  r0.get("phi_N_num"), ", phi_S_num",  r0.get("phi_S_num"))
-    print("x_O", r0.get("x_O"), ", x_C", r0.get("x_C"), ", x_N", r0.get("x_N"), ", x_S", r0.get("x_S"))
+    print("phi_H_num:", r0.get("phi_H_num"), ", phi_He_num", r0.get("phi_He_num"), ", phi_O_num", r0.get("phi_O_num"), ", phi_C_num",  r0.get("phi_C_num"), ", phi_N_num",  r0.get("phi_N_num"), ", phi_S_num",  r0.get("phi_S_num"))
+    print("x_He", r0.get("x_He"), ", x_O", r0.get("x_O"), ", x_C", r0.get("x_C"), ", x_N", r0.get("x_N"), ", x_S", r0.get("x_S"))
     print("RS_cold[cm]:", r0.get("RS_cold"), ", escape_base:", r0.get("escape_base"), "=", r0.get("escape_base_radius"), "cm")
     if r0.get("R_homopause") is not None: # only when [physics] use_homopause = true
         print("R_homopause[cm]:", r0.get("R_homopause"), "(", r0.get("homopause_species"), ", Kzz:", r0.get("Kzz"), ")")
     print("--- regime flags ---")
-    print("core_powered?        :", r0.get("core_powered?"), " (cold sonic point inside RXUV)")
+    print("core_powered?        :", r0.get("core_powered?"), " (Yes = cold sonic point inside RXUV)")
     print("homopause penetrated?:", r0.get("homopause_penetrated?"),
-          " (RXUV below the homopause -> fractionation is an upper bound)")
+          " (Yes = RXUV below the homopause -> fractionation is an upper bound)")
 
 if __name__ == "__main__":
     args = parse_args()
