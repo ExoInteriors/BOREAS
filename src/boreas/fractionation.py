@@ -1,4 +1,5 @@
 import numpy as np
+from .parameters import ATOMS, canonical_atom
 
 class FractionationPhysics:
     def __init__(self, params):
@@ -7,44 +8,16 @@ class FractionationPhysics:
     def T_outflow_from_cs(self, cs, mu_outflow):
         return (cs**2) * self.p.m_H * mu_outflow / self.p.k_b
 
-    def mu_eff_from_fluxes(self, phi_H_num, phi_O_num, phi_C_num=0.0, phi_N_num=0.0, phi_S_num=0.0):
-        total = max(phi_H_num + phi_O_num + phi_C_num + phi_N_num + phi_S_num, 1e-300)
-        return (self.p.am_h*phi_H_num + self.p.am_o*phi_O_num
-                + self.p.am_c*phi_C_num + self.p.am_n*phi_N_num
-                + self.p.am_s*phi_S_num) / total
-    
+    def mu_eff_from_fluxes(self, phi):
+        """Number-flux-weighted mean mass number of the escaping gas. phi: {atom: number flux}."""
+        reg = self.p.species_registry()
+        total = max(sum(phi.get(s, 0.0) for s in ATOMS), 1e-300)
+        return sum(reg[s]['A'] * phi.get(s, 0.0) for s in ATOMS) / total
+
     @staticmethod
     def atomic_counts_from_X(p):
         """Return per-species atomic counts per bulk mass at the XUV base (fully dissociated)."""
-        X = p.get_X_tuple()
-        # reuse N_* code
-        (X_H2, X_H2O, X_O2, X_CO2, X_CO, X_CH4, X_N2, X_NH3, X_H2S, X_SO2, X_S2) = X
-
-        N_H2  = X_H2  / p.mmw_H2_outflow  if X_H2  > 0 else 0.0
-        N_H2O = X_H2O / p.mmw_H2O_outflow if X_H2O > 0 else 0.0
-        N_O2  = X_O2  / p.mmw_O2_outflow  if X_O2  > 0 else 0.0
-        N_CO2 = X_CO2 / p.mmw_CO2_outflow if X_CO2 > 0 else 0.0
-        N_CO  = X_CO  / p.mmw_CO_outflow  if X_CO  > 0 else 0.0
-        N_CH4 = X_CH4 / p.mmw_CH4_outflow if X_CH4 > 0 else 0.0
-        N_N2  = X_N2  / p.mmw_N2_outflow  if X_N2  > 0 else 0.0
-        N_NH3 = X_NH3 / p.mmw_NH3_outflow if X_NH3 > 0 else 0.0
-        N_H2S = X_H2S / p.mmw_H2S_outflow if X_H2S > 0 else 0.0
-        N_SO2 = X_SO2 / p.mmw_SO2_outflow if X_SO2 > 0 else 0.0
-        N_S2  = X_S2  / p.mmw_S2_outflow  if X_S2  > 0 else 0.0
-
-        # N = dict(H = 2*N_H2 + 2*N_H2O + 4*N_CH4 + 3*N_NH3 + 2*N_H2S,
-        #         O = 1*N_H2O + 2*N_O2  + 2*N_CO2 + 1*N_CO  + 2*N_SO2,
-        #         C = 1*N_CO2 + 1*N_CO  + 1*N_CH4,
-        #         N = 2*N_N2  + 1*N_NH3,
-        #         S = 1*N_H2S + 1*N_SO2 + 2*N_S2)
-        
-        N = dict(H = (2.0/2.0)*N_H2 + (2.0/3.0)*N_H2O + (4.0/5.0)*N_CH4 + (3.0/4.0)*N_NH3 + (2.0/3.0)*N_H2S,
-                O = (1.0/3.0)*N_H2O + 1.0*N_O2        + (2.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (2.0/3.0)*N_SO2,
-                C = (1.0/3.0)*N_CO2 + (1.0/2.0)*N_CO  + (1.0/5.0)*N_CH4,
-                N = 1.0*N_N2        + (1.0/4.0)*N_NH3,
-                S = (1/3)*N_H2S     + (1.0/3.0)*N_SO2 + 1.0*N_S2
-        )
-        return N
+        return p.atomic_counts()
 
     @staticmethod
     def choose_light_and_heavy_major(p, RXUV, T_outflow, m_planet, allow_dynamic_light_major=True, forced_light_major='H', eps=1e-20, tol_major=0.1):
@@ -63,30 +36,34 @@ class FractionationPhysics:
         N = FractionationPhysics.atomic_counts_from_X(p)
 
         # masses in grams for all physics below (F_crit etc.)
-        mass_g = {"H": p.m_H, "C": p.m_C, "N": p.m_N, "O": p.m_O, "S": p.m_S}
-        
+        reg = p.species_registry()
+        mass_g = {s: reg[s]['m'] for s in ATOMS}
+
         # ---- pick light major i ----
         if allow_dynamic_light_major:
             # lightest species by mass, with non-negligible abundance (use mass_order or mass_g; both give same ordering)
-            candidates = [s for s in ('H','C','N','O','S') if N[s] > eps]
+            # H whenever it is present; He once H is gone
+            candidates = [s for s in ATOMS if N[s] > eps]
             if not candidates:
                 raise ValueError("No atomic species present at the XUV base.")
             i = min(candidates, key=lambda s: mass_g[s])
         else:
-            i = forced_light_major.upper()
+            i = canonical_atom(forced_light_major)
             if N.get(i, 0.0) <= eps:
                 raise ValueError(f"Forced light major {i} absent at base (N_{i}≈0).")
 
-        # ---- base mixing ratios relative to i ---- 
+        # ---- base mixing ratios relative to i ----
         Ni = max(N[i], eps)
-        f  = {s: (N[s]/Ni) for s in ('H','C','N','O','S')}
+        f  = {s: (N[s]/Ni) for s in ATOMS}
 
         # ---- choose heavy major j: abundance-first, physics tie-breaker ----
+        # In an H/He envelope this is He, and every heavier minor then diffuses through
+        # both H and He (the b_ik and b_jk = b_He,k terms of Eq. 5).
         g = p.G * m_planet / (RXUV**2)
-    
+
         # collect heavier-than-i candidates with their f_j and Fcrit(i↔j)
         cand = []
-        for s in ('C','N','O','S','H'): # order irrelevant; H will be skipped if i=H
+        for s in ATOMS: # order irrelevant; i and anything lighter are skipped
             if s == i:
                 continue
             if mass_g[s] <= mass_g[i]:
@@ -113,7 +90,7 @@ class FractionationPhysics:
 class GeneralizedFractionation:
     """
     Odert2018-style fractionation generalized to a dynamic light major i and heavy major j.
-    Species considered: H, C, N, O, S.
+    Species considered: ATOMS (H, He, C, N, O, S).
     All phi_* returned are NUMBER fluxes.
     """
     def __init__(self, params):
@@ -133,23 +110,20 @@ class GeneralizedFractionation:
         Returns:
           {
             'i': i, 'j': j,
-            'phi': {'H':..., 'C':..., 'N':..., 'O':..., 'S':...},  # NUMBER fluxes
-            'x':   {'C':..., 'N':..., 'O':..., 'S':...},           # entrainment fractions (x_i ≡ 1)
-            'f':   {'H':..., 'C':..., 'N':..., 'O':..., 'S':...},  # base mixing ratios relative to i
-            'mode': 'energy-limited', 'energy-limited (j stalled)' or
-                    'diffusion-limited (j stalled)'
-            'Fmass_in' / 'Fmass_out': supplied vs. actually carried mass flux
-                    (they differ only when the diffusion cap binds)
+            'phi': {'H':..., 'He':..., 'C':..., 'N':..., 'O':..., 'S':...},  # NUMBER fluxes
+            'x':   {'He':..., 'C':..., 'N':..., 'O':..., 'S':...},           # entrainment fractions (x_i ≡ 1)
+            'f':   {'H':..., 'He':..., 'C':..., 'N':..., 'O':..., 'S':...},  # base mixing ratios relative to i
+            'mode': 'energy-limited' or 'energy-limited (j stalled)'
+            'Fmass_in' / 'Fmass_out': supplied vs. actually carried mass flux (equal)
           }
         """
         p = self.p
         # choose i, j and compute f_s relative to i
         i, j, f = FractionationPhysics.choose_light_and_heavy_major(p, RXUV, T_outflow, m_planet, allow_dynamic_light_major, forced_light_major, eps)
         # present species
-        species = ['H','C','N','O','S']
+        species = ATOMS
         # masses
-        # m = {s: self.reg[s]['m'] for s in species} # amus!
-        m = {"H": p.m_H, "C": p.m_C, "N": p.m_N, "O": p.m_O, "S": p.m_S} # grams!
+        m = {s: self.reg[s]['m'] for s in species} # grams!
 
         # initialize x_s (x_i ≡ 1 by definition)
         x = {s: 1.0 for s in species if s != i}
@@ -169,33 +143,35 @@ class GeneralizedFractionation:
             b_ij = Fcrit = None
 
         for _ in range(max_iter):
-            # effective grams per escaping i-particle in denominator
-            denom_g_per_i = m[i] + sum(m[s]*f[s]*x.get(s,1.0) for s in species if s != i)
-            denom_g_per_i = max(denom_g_per_i, 1e-300)
-            Fi = flux_total_mass / denom_g_per_i # number flux of i
+            # grams per escaping i-particle carried by the minors (everything but i and j)
+            minors_g_per_i = sum(m[s]*f[s]*x.get(s,1.0) for s in species if s not in (i, j))
 
-            # if we have a heavy major j, update x_j first (Eq. 4)
-            if j is not None:
-                if not j_stalled:
-                    xj_new = 1.0 - Fcrit / max(Fi, 1e-300)
-                    if xj_new <= 0.0:
-                        # Heavy major j stalls and stays behind as a static background.
-                        # That does NOT stall the minors: j is picked by abundance, not by
-                        # mass, so minors can be lighter than j (C vs O in any C/O
-                        # atmosphere), and a rare species is cheaper to drag than an
-                        # abundant one anyway (the 1+f_k in its own crossover). Eq. 5 below
-                        # is already correct at x_j = 0, so let the minor loop decide
-                        # instead of zeroing every minor here.
-                        x[j] = 0.0
-                        j_stalled = True
-                    else:
-                        x[j] = self._clamp01(xj_new)
-
+            if j is None:
+                Fi = flux_total_mass / max(m[i] + minors_g_per_i, 1e-300) # number flux of i
+            else:
+                # Eq. 4, x_j = 1 - Fcrit/Fi, and the mass budget,
+                #   Fmass = Fi*(m_i + minors) + m_j*f_j*x_j*Fi = Fi*(m_i + minors) + m_j*f_j*(Fi - Fcrit),
+                # solved together for Fi in closed form, for the current minors. Iterating x_j
+                # instead converges only while m_j*f_j*Fcrit < Fmass, which fails for an
+                # abundant heavy major (e.g. He when the only H left is the trace in water),
+                # and it made j's fate depend on the x_j = 1 starting guess.
+                Fi = (flux_total_mass + m[j]*f[j]*Fcrit) / max(m[i] + m[j]*f[j] + minors_g_per_i, 1e-300)
+                j_stalled = (Fi <= Fcrit)
                 if j_stalled:
-                    # i has to diffuse through the static j, so its own flux is capped at
-                    # Fcrit. Applied inside the loop as well, so the minors below are
-                    # dragged by the flux i actually has, not by the uncapped EL supply.
-                    Fi = min(Fi, Fcrit)
+                    # Heavy major j stalls and stays behind as a static background: the
+                    # energy cannot lift i past the crossover even with j left out. Then
+                    # Fi = Fmass/(m_i + minors) <= Fcrit, so i is still energy-limited and
+                    # within its diffusion limit through the static j.
+                    # That does NOT stall the minors: j is picked by abundance, not by
+                    # mass, so minors can be lighter than j (C vs O in any C/O
+                    # atmosphere), and a rare species is cheaper to drag than an
+                    # abundant one anyway (the 1+f_k in its own crossover). Eq. 5 below
+                    # is already correct at x_j = 0, so let the minor loop decide
+                    # instead of zeroing every minor here.
+                    x[j] = 0.0
+                    Fi = flux_total_mass / max(m[i] + minors_g_per_i, 1e-300)
+                else:
+                    x[j] = 1.0 - Fcrit / Fi
 
             # update minors (Eq. 5) for all s != i and s != j
             changed = False
@@ -228,14 +204,7 @@ class GeneralizedFractionation:
         denom_g_per_i = max(denom_g_per_i, 1e-300)
         Fi = flux_total_mass / denom_g_per_i
 
-        diffusion_limited = False
-        if j_stalled:
-            Fi_EL = Fi                        # what the energy budget alone would supply
-            Fi    = min(Fi, Fcrit)            # diffusion cap through the static j
-            diffusion_limited = (Fi < Fi_EL)  # plain comparison, never identity on floats
-            mode  = 'diffusion-limited (j stalled)' if diffusion_limited else 'energy-limited (j stalled)'
-        else:
-            mode = 'energy-limited'
+        mode = 'energy-limited (j stalled)' if j_stalled else 'energy-limited'
 
         phi = {s: 0.0 for s in species}
         phi[i] = Fi
@@ -245,13 +214,11 @@ class GeneralizedFractionation:
             phi[s] = Fi * f[s] * x.get(s, 1.0)
 
         # temporary: mass-flux self-consistency guard.
-        # The escaping mass can never exceed the energy budget, and it matches it exactly
-        # unless the diffusion cap binds, in which case part of the budget goes unused.
+        # The escaping mass always matches the energy budget: when j stalls, i is still
+        # below its diffusion limit (see above), so no part of the budget goes unused.
         Fphi = sum(m[s] * phi.get(s, 0.0) for s in species) # g cm^-2 s^-1
         rel_err = (Fphi - flux_total_mass) / max(flux_total_mass, 1e-300)
-        if rel_err > 1e-6:
-            raise RuntimeError(f"Fractionation escapes more mass than supplied: rel_err={rel_err:.3e}")
-        if (not diffusion_limited) and rel_err < -1e-6:
+        if abs(rel_err) > 1e-6:
             raise RuntimeError(f"Mass-flux mismatch in fractionation: rel_err={rel_err:.3e}")
 
         # hand back the exact mass flux that was used (for debugging/comparison)
@@ -266,11 +233,12 @@ class GeneralizedFractionation:
 # -----------------------------------------
 class Fractionation:
     """
-    Four-species orchestrator:
+    Orchestrator:
       1) start from reservoir mu_outflow,
       2) run hydro (RXUV, c_s, Mdot),
-      3) compute 5-species fluxes (H,O,C,N,S),
-      4?) update mu_eff from escaping mixture, iterate to convergence?
+      3) compute fluxes for every species in ATOMS (H, He, C, N, O, S),
+      4) update mu_eff from escaping mixture, iterate to convergence
+         (relative change in mu_eff <= tol, at most max_iter iterations)
     """
     def __init__(self, params):
         self.params  = params
@@ -285,7 +253,6 @@ class Fractionation:
                 continue
             Mp, Rp, Teq = sol['m_planet'], sol['r_planet'], sol['Teq']
             mu_eff  = self.params.get_mu_outflow_current()
-            mu_prev = None
 
             # keep the latest results so we can return even if we converge at it=0
             final_hydro = dict(sol)
@@ -299,7 +266,7 @@ class Fractionation:
                     # 1.5) set an initial atomic_y_xuv before the first hydro call
                     N = FractionationPhysics.atomic_counts_from_X(self.params)
                     sN = sum(N.values())
-                    self.params.atomic_y_xuv = {k: N[k]/sN for k in ("H","C","N","O","S")} if sN > 0 else None
+                    self.params.atomic_y_xuv = {k: N[k]/sN for k in ATOMS} if sN > 0 else None
 
                     # 2) run hydro-loss with RL disabled to get a consistent EL geometry for the current mu and chi_xuv
                     probe = mass_loss.compute_mass_loss_parameters(np.array([Mp]), np.array([Rp]), np.array([Teq]), rl_policy='never')[0]
@@ -340,13 +307,13 @@ class Fractionation:
                     # 5) update mu from number fluxes
                     phi = res['phi']
 
-                    sumphi = max(sum(phi.get(s, 0.0) for s in ("H","C","N","O","S")), 1e-300)
-                    y_atomic = {s: phi.get(s, 0.0)/sumphi for s in ("H","C","N","O","S")}
+                    sumphi = max(sum(phi.get(s, 0.0) for s in ATOMS), 1e-300)
+                    y_atomic = {s: phi.get(s, 0.0)/sumphi for s in ATOMS}
 
                     # make mixture visible to hydro on next iteration
                     self.params.atomic_y_xuv = y_atomic
 
-                    mu_new = self.phys.mu_eff_from_fluxes(phi.get('H',0.0), phi.get('O',0.0), phi.get('C',0.0), phi.get('N',0.0), phi.get('S',0.0))
+                    mu_new = self.phys.mu_eff_from_fluxes(phi)
 
                     # store latest in case we converge now
                     final_hydro = hydro
@@ -382,13 +349,11 @@ class Fractionation:
 
                 # augment the hydro dict with fractionation results
                 final_hydro.update({
-                    # number fluxes:
-                    'phi_H_num': phi.get('H',0.0), 'phi_O_num': phi.get('O',0.0),
-                    'phi_C_num': phi.get('C',0.0), 'phi_N_num': phi.get('N',0.0),
-                    'phi_S_num': phi.get('S',0.0),
-                    # entrainment x and base ratios f:
-                    'x_O': x.get('O', 1.0), 'x_C': x.get('C', 1.0), 'x_N': x.get('N', 1.0), 'x_S': x.get('S', 1.0),
-                    'f_O': f['O'], 'f_C': f['C'], 'f_N': f['N'], 'f_S': f['S'],
+                    # number fluxes: phi_H_num, phi_He_num, phi_C_num, ...
+                    **{f'phi_{s}_num': phi.get(s, 0.0) for s in ATOMS},
+                    # entrainment x and base ratios f (x_He, f_He, x_C, f_C, ...; none for H):
+                    **{f'x_{s}': x.get(s, 1.0) for s in ATOMS if s != 'H'},
+                    **{f'f_{s}': f[s] for s in ATOMS if s != 'H'},
                     # who is i / j:
                     'light_major_i': final_res['i'], 'heavy_major_j': final_res['j'],
                     # thermodynamics:
