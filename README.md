@@ -1,6 +1,6 @@
 # BOREAS
 
-**BOREAS** is a Python package for modeling **hydrodynamic mass loss** from exoplanet atmospheres, including **energy-limited (EL)** and **recombination-limited (RL)** regimes with **multi-species fractionation** among hydrogen (H), oxygen (O), carbon (C), nitrogen (N), and sulfur (S).
+**BOREAS** is a Python package for modeling **hydrodynamic mass loss** from exoplanet atmospheres, including **energy-limited (EL)** and **recombination-limited (RL)** regimes with **multi-species fractionation** among hydrogen (H), helium (He), oxygen (O), carbon (C), nitrogen (N), and sulfur (S).
 
 The code couples a **molecular bolometric (IR) region** to a **fully dissociated atomic outflow**, tracking composition-dependent escape and diffusive separation self-consistently.
 
@@ -55,11 +55,16 @@ python examples/run_single_planet.py -v -c examples/configs/json_planets.toml
 Done!
 Config: /Users/mvalatsou/PhD/Repos/BOREAS/examples/configs/json_planets.toml
 Planet: TRAPPIST-1 b
-Regime: EL , RXUV[cm]: 735074860.5223168 , Mdot[g/s]: 2006230940.4435651
+Regime: EL , RXUV[cm]: 735615412.5639001 , Mdot[g/s]: 502665040.61089957
 light_major: H , heavy_major: O
-T_outflow[K]: 7174.834055775216 , mu_outflow: 4.778164893161477
-phi_H_num: 27642592522227.367 , phi_O_num 9306701767503.541 , phi_C_num 0.0 , phi_N_num 0.0 , phi_S_num 0.0
-x_O 0.6733595454203535 , x_C 0.0 , x_N 0.0 , x_S 0.0
+T_outflow[K]: 3815.873045427351 , mu_outflow: 3.2676802181478926
+phi_H_num: 11540198791750.639 , phi_He_num 0.0 , phi_O_num 2055358407730.817 , phi_C_num 0.0 , phi_N_num 0.0 , phi_S_num 0.0
+x_He 0.0 , x_O 0.356208492560815 , x_C 0.0 , x_N 0.0 , x_S 0.0
+RS_cold[cm]: 150291609718.336 , escape_base: RXUV = 735615412.5639001 cm
+R_homopause[cm]: 730696737.9838252 ( H2O , Kzz: 100000000.0 )
+--- regime flags ---
+core_powered?        : No  (cold sonic point inside RXUV)
+homopause penetrated?: No  (RXUV below the homopause -> fractionation is an upper bound)
 ```
 
 > Notebook users: relative paths resolve from the notebook’s working directory. Either cd to the repo root first, or build an absolute Path to the TOML.
@@ -101,6 +106,7 @@ FXUV_erg_cm2_s = "from_data"     # "from_data" to read .json value, or input val
 
 [composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
 H2  = 0
+He  = 0
 H2O = 1
 O2  = 0
 CO2 = 0
@@ -122,6 +128,7 @@ Kzz_cm2_s     = 1e8               # eddy diffusion coefficient, sets the homopau
 
 [xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
 H = 1.89e-18
+He = 7.43e-18                     # at its 24.59 eV edge: He cannot absorb at 20 eV (0 there)
 O = 1.09e-17
 C = 1.01e-17
 N = 1.41e-17
@@ -129,6 +136,7 @@ S = 3.27e-17
 
 [infrared.kappa_cm2_g]            # IR mass opacities kappa (κ) (cm^2 g^-1) for the bolometric region
 H2  = 1e-2
+He  = 3e-3                        # collision-induced only (H2-He); He-He is negligible
 H2O = 1.0                         # IR (1–30 µm) Planck-mean-ish at ~1000 K, ~1 bar
 O2  = 2e-2                        # weak in thermal IR except CIA/quadrupole effects
 CO2 = 5e-1                        # moderate to strong in thermal IR
@@ -140,7 +148,10 @@ H2S = 8e-1                        # moderate to strong in thermal IR
 SO2 = 1.0                         # strong in thermal IR
 S2  = 2e-1                        # probably low to moderate
 
-[diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys can be "HO" or "H-O"
+[diffusion]
+he_set = "literature"             # He pairs: "literature" (Mason & Marrero 1970; Cherubim+ 2024, 2025) or "chapman-enskog"
+
+[diffusion.b]                     # b_ij(T) = A * T^gamma (cm^-1 s^-1); keys "HO", "H-O", "HHe" or "He-O", either order; overrides he_set
 HO = { A=4.8e17, gamma=0.75 }     # Zahnle and Kasting 1986, O loss with background H
 HC = { A=8.303e17, gamma=0.6561 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
 HS = { A=5.261e17, gamma=0.6593 } # Chapman-Enskog LJ 12-6, Svehla 1962, fit over 1-15 kK
@@ -163,7 +174,6 @@ auto_normalize_X = true           # normalize composition if sum!=1
 ```
 
 ### Notes & units
-### Notes & units
 - FXUV: always pass the **standard incident flux** `FXUV = L_XUV / (4π a²)` [erg cm⁻² s⁻¹], i.e. the stellar XUV energy flux at the planet's orbit (plain inverse-square law).
   BOREAS implements the Owen & Schlichting (2024) Eq. 17 energy-limited rate:
 
@@ -171,10 +181,17 @@ auto_normalize_X = true           # normalize composition if sum!=1
 
   The factor of 4 in the denominator — accounting for the planet intercepting flux over cross-section πR²_XUV but losing mass over the full sphere 4πR²_XUV — is built into BOREAS and gives the correct **global** mass-loss rate.
 - Composition: mass fractions of molecules in the bolometric region; outflow is atomic (the code handles the bookkeeping).
+  Valid keys are `H2, He, H2O, O2, CO2, CO, CH4, N2, NH3, H2S, SO2, S2`; any other key is an error (so `HE` cannot
+  silently drop helium).
 - σ_XUV: atomic photoabsorption cross-sections (cm²).
   Defaults have been calculated after Verner+1996.
+  He is the exception to the 20 eV reference: its ionization edge is 24.59 eV, so at 20 eV it is strictly
+  transparent and a He-dominated outflow would have nothing to absorb the XUV. The default takes He at its edge
+  (7.43e-18 cm²), the closest energy at which it absorbs at all; set `He = 0` for the strict 20 eV picture.
 - κ_IR: IR mass opacities (cm² g⁻¹) for the hydrostatic molecular layer.
   If `[infrared.kappa_cm2_g]` is omitted, BOREAS uses the same coarse 1-30 µm, Planck-mean-ish defaults shown in the example block above.
+  He has no IR bands; its 3e-3 is the H2-He collision-induced share in an H2-rich gas, so a He-dominated gas is more
+  transparent than that.
 - b_ij(T): binary diffusion coefficients in cm⁻¹ s⁻¹; the model uses gram masses and k_B in erg/K consistently.
   The defaults use H-O from Zahnle & Kasting (1986) and the other nine pairs from Chapman-Enskog theory with a
   Lennard-Jones 12-6 potential, using Svehla (1962) atomic parameters. The exact Chapman-Enskog expression is not a
@@ -208,7 +225,7 @@ Use [planet].name = "<key>" to pull those numbers. You can open that JSON to see
 BOREAS/
 ├─ src/boreas/
 │  ├─ __init__.py
-│  ├─ parameters.py             # constants, composition, cross-sections, diffusion fits
+│  ├─ parameters.py             # species tables, constants, composition, cross-sections, diffusion fits
 │  ├─ mass_loss.py              # EL/RL solver, Parker wind normalization, RXUV search
 │  ├─ fractionation.py          # Odert-style multi-species fractionation
 │  ├─ config.py                 # TOML I/O and param application
@@ -221,7 +238,8 @@ BOREAS/
 │  ├─ test_choose_light_and_heavy_major.py
 │  ├─ test_consistency_benchmark.py
 │  ├─ test_fractionation_units.py
-│  └─ test_homopause_and_cpml.py
+│  ├─ test_homopause_and_cpml.py
+│  └─ test_species_tables.py
 ├─ pyproject.toml
 └─ README.md
 ```
