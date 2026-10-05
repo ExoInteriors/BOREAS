@@ -8,6 +8,7 @@ import pytest
 
 from boreas import ModelParams, MassLoss, Fractionation
 from boreas.fractionation import FractionationPhysics
+from boreas.parameters import ATOMS
 
 from boreas.config import (
     load_config_toml,
@@ -23,7 +24,7 @@ from boreas.config import (
 # - μ consistency: reported mmw_outflow equals the number-flux-weighted mean μ from phis
 # - regime conventions: in RL, T_outflow≈1e4 K and cs≈1.2e6 cm/s
 # - non-negativity: all number fluxes are ≥ 0
-# - diffusion-limited signal: if mode says diffusion-limited / j stalled, then phi_j≈0
+# - stall signal: if mode says j stalled, then phi_j≈0
  
 # --- helpers ---------------------------------------------------------------
 
@@ -40,14 +41,26 @@ def atomic_counts_from_X(p):
 
 # --- tests -----------------------------------------------------------------
 
+# None = composition from the config file
+# He cases: He as j, He-rich with H only from water, He as i (no H)
+COMPOSITIONS = {
+    "config":      None,
+    "H2-He-H2O":   {"H2": 0.74, "He": 0.25, "H2O": 0.01},
+    "He-H2O":      {"He": 0.95, "H2O": 0.05},
+    "He-CO2":      {"He": 0.90, "CO2": 0.10},
+}
+
+@pytest.mark.parametrize("composition", list(COMPOSITIONS.values()), ids=list(COMPOSITIONS))
 @pytest.mark.parametrize("cfg_path", [DEFAULT_CFG])
-def test_pipeline_consistency(cfg_path: Path):
+def test_pipeline_consistency(cfg_path: Path, composition):
     if not cfg_path.exists():
         pytest.skip(f"Example config not found: {cfg_path}")
 
     # 1) load config and initialize modules
     params = ModelParams()
     cfg = load_config_toml(cfg_path)
+    if composition is not None:
+        cfg["composition"] = composition
     _fx_args = apply_params_from_config(cfg, params)
 
     mass_loss = MassLoss(params)
@@ -62,23 +75,18 @@ def test_pipeline_consistency(cfg_path: Path):
 
     # quick sanity
     assert r0["regime"] in ("EL", "RL")
-    assert r0["light_major_i"] in ("H", "C", "N", "O", "S")
+    assert r0["light_major_i"] in ATOMS
     # heavy_major_j can be None
-    assert r0.get("heavy_major_j", None) in (None, "H", "C", "N", "O", "S")
+    assert r0.get("heavy_major_j", None) in (None, *ATOMS)
 
     # 3) mass conservation at RXUV: sum(m_i * phi_i) == Mdot / (4π R^2)
     RXUV = float(r0["RXUV"])
     Mdot = float(r0["Mdot"])
     Fmass_expected = Mdot / (4.0 * math.pi * RXUV**2)
 
-    m = {"H": params.m_H, "C": params.m_C, "N": params.m_N, "O": params.m_O, "S": params.m_S}
-    phi = {
-        "H": float(r0.get("phi_H_num", 0.0)),
-        "O": float(r0.get("phi_O_num", 0.0)),
-        "C": float(r0.get("phi_C_num", 0.0)),
-        "N": float(r0.get("phi_N_num", 0.0)),
-        "S": float(r0.get("phi_S_num", 0.0)),
-    }
+    reg = params.species_registry()
+    m = {s: reg[s]["m"] for s in ATOMS}
+    phi = {s: float(r0.get(f"phi_{s}_num", 0.0)) for s in ATOMS}
     Fmass_from_phi = sum(m[s] * phi.get(s, 0.0) for s in m.keys())
 
     assert approx_rel(Fmass_from_phi, Fmass_expected, rtol=1e-6, atol=0.0), (
@@ -87,48 +95,32 @@ def test_pipeline_consistency(cfg_path: Path):
 
     # 4) x’s are physical and x_i == 1
     i = r0["light_major_i"]
-    x = {"O": r0["x_O"], "C": r0["x_C"], "N": r0["x_N"], "S": r0["x_S"]}
+    x = {s: r0[f"x_{s}"] for s in ATOMS if s != "H"}
     for k, xv in x.items():
         assert 0.0 <= xv <= 1.0, f"x_{k} out of bounds: {xv}"
-    # by definition x_i ≡ 1 (not stored separately); ensure implied via construction:
-    # if any species is the light major, its 'x' isn't reported and should be conceptually 1.
-    # at least enforce that no reported x exceeds 1 and none are negative (done above).
+    # x_i ≡ 1 isn't reported, so only the bounds above are checked
 
     # 5) f (base mixing ratios) matches atomic count ratios relative to i
-    #    f_s = N_s / N_i
+    #    f_s = N_s / N_i (no f_H column: H is always i when present)
     N = atomic_counts_from_X(params)
     Ni = max(N[i], 1e-300)
-    f_expected = {s: (N[s] / Ni) for s in "HCNOS"}
-    # reported f_*
-    f_reported = {
-        "H": 1.0, # by definition relative to i (if i==H this equals 1; if i!=H this is N_H/N_i)
-        "C": float(r0["f_C"]),
-        "N": float(r0["f_N"]),
-        "O": float(r0["f_O"]),
-        "S": float(r0["f_S"]),
-    }
-
-    # H is not explicitly stored; if i != H, the expected ratio is N_H/N_i; if i==H, that is 1.
+    f_expected = {s: (N[s] / Ni) for s in ATOMS}
+    f_reported = {s: float(r0[f"f_{s}"]) for s in ATOMS if s != "H"}
     if i != "H":
-        assert approx_rel(f_reported.get("H", 1.0), f_expected["H"], rtol=1e-6, atol=0.0)
+        assert f_expected["H"] == 0.0
+        assert f_reported[i] == 1.0
 
-    for s in ("C", "N", "O", "S"):
-        # if a species is truly absent, f_expected could be 0; accept tiny absolute error there.
+    for s, fv in f_reported.items():
+        # absent species -> f ~ 0
         if f_expected[s] == 0.0:
-            assert abs(f_reported[s]) < 1e-12
+            assert abs(fv) < 1e-12
         else:
-            assert approx_rel(f_reported[s], f_expected[s], rtol=1e-6, atol=0.0), (
-                f"f_{s} mismatch: got {f_reported[s]:.6e}, expected {f_expected[s]:.6e} (i={i})"
+            assert approx_rel(fv, f_expected[s], rtol=1e-6, atol=0.0), (
+                f"f_{s} mismatch: got {fv:.6e}, expected {f_expected[s]:.6e} (i={i})"
             )
 
     # 6) μ consistency: mmw_outflow equals flux-weighted mean from φ’s
-    mu_from_phi = (
-        params.am_h * phi["H"]
-        + params.am_o * phi["O"]
-        + params.am_c * phi["C"]
-        + params.am_n * phi["N"]
-        + params.am_s * phi["S"]
-    )
+    mu_from_phi = sum(reg[s]["A"] * phi[s] for s in ATOMS)
     denom = max(sum(phi.values()), 1e-300)
     mu_from_phi /= denom
 
@@ -148,11 +140,9 @@ def test_pipeline_consistency(cfg_path: Path):
     for s in phi:
         assert phi[s] >= 0.0, f"Negative number flux for {s}: {phi[s]}"
 
-    # 9) if heavy major j stalled, mode string should reflect that; else not diffusion-limited
+    # 9) if heavy major j stalled, mode string should reflect that
     mode = r0.get("fractionation_mode", "")
     j = r0.get("heavy_major_j", None)
-    if "diffusion-limited" in mode or "j stalled" in mode:
-        # when j stalls, all heavier species than i should have zero flux (or near zero).
-        if j is not None:
-            pj = {"H": "phi_H_num", "C": "phi_C_num", "N": "phi_N_num", "O": "phi_O_num", "S": "phi_S_num"}[j]
-            assert float(r0[pj]) <= 1e-20
+    if "j stalled" in mode:
+        assert j is not None
+        assert float(r0[f"phi_{j}_num"]) <= 1e-20
