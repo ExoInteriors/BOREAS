@@ -383,7 +383,9 @@ class ModelParams:
     def _recompute_composites(self):
         self._check_X_sum()
         X = self.get_X_dict()
-        self.mmw_bolometric_all = sum(X[mol] * getattr(self, f"mmw_{mol}") for mol in MOLECULES)
+        # X are mass fractions, so mu is the harmonic mean: 1/mu = sum_k X_k / mu_k
+        # (particles per gram), not the mass-weighted sum_k X_k * mu_k.
+        self.mmw_bolometric_all = 1.0 / sum(X[mol] / getattr(self, f"mmw_{mol}") for mol in MOLECULES)
 
     def get_mmw_bolometric(self):
         return self.mmw_bolometric_all

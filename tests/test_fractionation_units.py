@@ -11,6 +11,7 @@ from boreas.fractionation import FractionationPhysics, GeneralizedFractionation
 # - b_ij symmetric, b_HO(1e4 K) ~ 1e20-1e21 cm^-1 s^-1 (catches unit typos)
 # - every pair of ATOMS is in diffusion_fits under its canonical key
 # - j escapes only for F_mass > m_i F_crit, F_crit = g(m_j−m_i)b_ij / [k_B T (1+f_j)]
+# - binary H-O matches the hand solution, incl. pure H2O and supply well above crossover
 # - j stalled: φ_i = F_mass / m_i
 # - all x_s in [0,1]
 # - minors lighter than j still escape when j stalls, mass budget always used up
@@ -93,6 +94,48 @@ def test_heavy_major_crossover_sits_at_m_i_Fcrit():
     assert math.isclose(res["x"][j], 1.0 - Fcrit / phi_i, rel_tol=1e-9)
     assert 0.0 < res["x"][j] < 0.1
     assert math.isclose(res["Fmass_out"], Fmass, rel_tol=1e-9)
+
+@pytest.mark.parametrize("composition, f_O_by_hand", [
+    # O/H atoms, integer mass numbers as in the code: (0.10/18) / (2*0.90/2 + 2*0.10/18) = 1/164
+    ({"H2": 0.90, "H2O": 0.10}, 1.0 / 164.0),
+    # pure water: one O per two H, whatever the molecular masses
+    ({"H2O": 1.0}, 0.5),
+])
+@pytest.mark.parametrize("supply", [1.5, 3.0, 10.0])
+def test_binary_H_O_matches_the_hand_solution(composition, f_O_by_hand, supply):
+    """
+    Binary H-O drag (Hunten 1987; Zahnle & Kasting 1986), solved by hand:
+        mass budget  F_mass = m_H phi_H + m_O phi_O,   phi_O = f_O x_O phi_H,   x_O = 1 - F_crit/phi_H
+    =>  phi_H = (F_mass + m_O f_O F_crit) / (m_H + m_O f_O)
+    f_O is computed by hand, not from the code. Covers the abundant-heavy-major case
+    (pure H2O) and supplies well above the crossover, where the old fixed-point
+    iteration on x_j returned x_O = 0 for pure water at 3x the crossover (should be 0.18).
+    """
+    p = ModelParams()
+    p.set_composition(composition, auto_normalize=False)
+    gen = GeneralizedFractionation(p)
+
+    M = 5.0 * p.mearth
+    RXUV = 1.2 * 2.4 * p.rearth
+    g = p.G * M / RXUV**2
+    T = 3000.0
+
+    i, j, f = FractionationPhysics.choose_light_and_heavy_major(p, RXUV, T, M)
+    assert i == "H" and j == "O"
+    assert math.isclose(f["O"], f_O_by_hand, rel_tol=1e-3)
+
+    m_H, m_O = p.m_H, p.m_O
+    Fcrit = g * (m_O - m_H) * p.b_pair("H", "O", T) / (p.k_b * T * (1.0 + f_O_by_hand))
+    Fmass = supply * m_H * Fcrit
+
+    phi_H = (Fmass + m_O * f_O_by_hand * Fcrit) / (m_H + m_O * f_O_by_hand)
+    x_O = 1.0 - Fcrit / phi_H
+
+    res = gen.compute_fluxes(Fmass, RXUV, T, M)
+    assert res["mode"] == "energy-limited"
+    assert math.isclose(res["phi"]["H"], phi_H, rel_tol=1e-3)
+    assert math.isclose(res["x"]["O"], x_O, rel_tol=1e-3)
+    assert math.isclose(res["phi"]["O"], f_O_by_hand * x_O * phi_H, rel_tol=2e-3)
 
 def test_energy_limited_j_stalled_branch_matches_FiEL():
     """j stalled -> phi_i = Fi_EL = Fmass / m_i (also checks m_i is in grams)."""

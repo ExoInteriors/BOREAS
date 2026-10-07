@@ -95,6 +95,13 @@ def test_pure_he_outflow():
     assert p.kappa_p_all == p.kappa["He"]
     assert p.homopause_molecule() == ("He", 4.0)
 
+def test_bolometric_mmw_is_harmonic_mean_of_mass_fractions():
+    """Equal masses of H2 and H2O: 1/mu = 0.5/2 + 0.5/18, i.e. mu = 3.6, not 10."""
+    p = ModelParams()
+    p.set_composition({"H2": 0.5, "H2O": 0.5})
+    assert math.isclose(p.get_mmw_bolometric(), 1.0 / (0.5 / p.mmw_H2 + 0.5 / p.mmw_H2O))
+    assert math.isclose(p.get_mmw_bolometric(), 3.6)
+
 def test_he_dilutes_the_xuv_absorption_of_an_h_envelope():
     """He absorbs per atom, but there are 4x fewer He atoms per gram."""
     p = ModelParams()
