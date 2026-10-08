@@ -4,7 +4,7 @@ import argparse
 
 from boreas.config import load_config_toml
 from boreas import ModelParams, MassLoss, Fractionation
-from boreas.config import apply_params_from_config, build_inputs_from_config, fractionation_runtime_args
+from boreas.config import apply_params_from_config, build_inputs_from_config, fractionation_runtime_args, mass_loss_runtime_args
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CFG = HERE / "configs" / "json_planets.toml"
@@ -47,7 +47,7 @@ def main(cfg_path: Path, verbose: bool = False):
         print(f"[runner] inputs: M={mass[0]:.3e} g, R={radius[0]:.3e} cm, Teq={teq[0]:.1f} K, FXUV={params.FXUV}")
 
     # --- run ---
-    ml_results  = mass_loss.compute_mass_loss_parameters(mass, radius, teq)
+    ml_results  = mass_loss.compute_mass_loss_parameters(mass, radius, teq, **mass_loss_runtime_args(cfg))
     frac_kwargs = fractionation_runtime_args(cfg)
     f_results   = fractionation.execute(ml_results, mass_loss, **frac_kwargs)
 
@@ -55,16 +55,17 @@ def main(cfg_path: Path, verbose: bool = False):
     r0 = f_results[0]
     print("Done!")
     print(f"Config: {cfg_path}")
-    print("Planet:", fx_args["planet_name"])
+    print("\n Planet:", fx_args["planet_name"])
     print("Regime:", r0.get("regime"), ", RXUV[cm]:", r0.get("RXUV"), ", Mdot[g/s]:", r0.get("Mdot"))
-    print("light_major:", r0.get("light_major_i"), ", heavy_major:", r0.get("heavy_major_j"))
+    print("Mdot_EL_target[g/s]:", r0.get("Mdot_EL_target"), " (analytic EL rate at the EL RXUV; calibrates c_s, not reported as Mdot)")
     print("T_outflow[K]:", r0.get("T_outflow"), ", mu_outflow:", r0.get("mmw_outflow"))
+    print("\n light_major:", r0.get("light_major_i"), ", heavy_major:", r0.get("heavy_major_j"))
     print("phi_H_num:", r0.get("phi_H_num"), ", phi_He_num", r0.get("phi_He_num"), ", phi_O_num", r0.get("phi_O_num"), ", phi_C_num",  r0.get("phi_C_num"), ", phi_N_num",  r0.get("phi_N_num"), ", phi_S_num",  r0.get("phi_S_num"))
     print("x_He", r0.get("x_He"), ", x_O", r0.get("x_O"), ", x_C", r0.get("x_C"), ", x_N", r0.get("x_N"), ", x_S", r0.get("x_S"))
-    print("RS_cold[cm]:", r0.get("RS_cold"), ", escape_base:", r0.get("escape_base"), "=", r0.get("escape_base_radius"), "cm")
+    print("\nRS_cold[cm]:", r0.get("RS_cold"), ", escape_base:", r0.get("escape_base"), "=", r0.get("escape_base_radius"), "cm")
     if r0.get("R_homopause") is not None: # only when [physics] use_homopause = true
         print("R_homopause[cm]:", r0.get("R_homopause"), "(", r0.get("homopause_species"), ", Kzz:", r0.get("Kzz"), ")")
-    print("--- regime flags ---")
+    print("\n--- regime flags ---")
     print("core_powered?        :", r0.get("core_powered?"), " (Yes = cold sonic point inside RXUV)")
     print("homopause penetrated?:", r0.get("homopause_penetrated?"),
           " (Yes = RXUV below the homopause -> fractionation is an upper bound)")

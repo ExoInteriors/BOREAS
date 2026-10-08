@@ -1,6 +1,8 @@
 from __future__ import annotations
 from importlib.resources import files
+from pathlib import Path
 from .parameters import ModelParams
+from .spectrum import XUVSpectrum, E_H_EDGE_EV
 from typing import Dict, Any
 from boreas.data import load_planet_params
 
@@ -14,7 +16,10 @@ except ModuleNotFoundError:
 
 def load_config_toml(path: str) -> Dict[str, Any]:
     with open(path, "rb") as f:
-        return _toml.load(f)
+        cfg = _toml.load(f)
+    # remembered so that relative file paths in the config (e.g. [xuv].spectrum_file) resolve from its folder
+    cfg["_config_dir"] = str(Path(path).resolve().parent)
+    return cfg
 
 def _load_builtin_planets() -> Dict[str, Any]:
     return load_planet_params()
@@ -68,13 +73,27 @@ def apply_params_from_config(cfg: Dict[str, Any], params: ModelParams):
     pname  = planet.get("name")
     if not pname:
         raise ValueError("Config must include [planet].name")
-    # FXUV: number or "from_data"
+    # FXUV: number or "from_data"; with [xuv].spectrum_file, "from_spectrum" or a number
+    # to normalise the spectrum to
     FXUV_val = planet.get("FXUV_erg_cm2_s", "from_data")
-    if isinstance(FXUV_val, str) and FXUV_val.lower() == "from_data":
-        FXUV_val = float(_load_planet_field(pname, "FXUV"))
+    spectrum = _load_spectrum(cfg)
+    if spectrum is not None:
+        if isinstance(FXUV_val, str):
+            if FXUV_val.lower() != "from_spectrum":
+                raise ValueError(f'[xuv].spectrum_file is set, so [planet].FXUV_erg_cm2_s must be "from_spectrum" '
+                                 f'(use the spectrum as given) or a number (normalise the spectrum to it), '
+                                 f'not "{FXUV_val}".')
+            params.set_xuv_spectrum(spectrum)
+        else:
+            params.set_xuv_spectrum(spectrum, normalize_to=float(FXUV_val))
     else:
-        FXUV_val = float(FXUV_val)
-    params.update_param("FXUV", FXUV_val)
+        if isinstance(FXUV_val, str) and FXUV_val.lower() == "from_spectrum":
+            raise ValueError('[planet].FXUV_erg_cm2_s = "from_spectrum" needs [xuv].spectrum_file.')
+        if isinstance(FXUV_val, str) and FXUV_val.lower() == "from_data":
+            FXUV_val = float(_load_planet_field(pname, "FXUV"))
+        else:
+            FXUV_val = float(FXUV_val)
+        params.update_param("FXUV", FXUV_val)
 
     # --- physics (optional) ---
     phys = cfg.get("physics", {})
@@ -93,6 +112,9 @@ def apply_params_from_config(cfg: Dict[str, Any], params: ModelParams):
     # (alpha_rec left as default unless you *really* want to expose it)
 
     # --- XUV cross-sections (atomic, cm^2) ---
+    params.chi_from_spectrum = bool(cfg.get("xuv", {}).get("chi_from_spectrum", False))
+    if params.chi_from_spectrum and spectrum is None:
+        raise ValueError("[xuv].chi_from_spectrum = true needs [xuv].spectrum_file.")
     sig = cfg.get("xuv", {}).get("sigma_cm2", {})
     if sig:
         params.set_sigma_XUV(sig)
@@ -133,7 +155,36 @@ def fractionation_runtime_args(cfg: Dict[str, Any]):
     max_iter  = int(frac.get("max_iter", 100))
     return dict(allow_dynamic_light_major=allow_dyn,
                 forced_light_major=forced,
-                tol=tol, max_iter=max_iter)
+                tol=tol, max_iter=max_iter,
+                rl_policy=_rl_policy(cfg))
+
+def mass_loss_runtime_args(cfg: Dict[str, Any]):
+    """Return kwargs for MassLoss.compute_mass_loss_parameters from config."""
+    return dict(rl_policy=_rl_policy(cfg))
+
+def _rl_policy(cfg: Dict[str, Any]) -> str:
+    """[advanced].rl_policy: "auto" (switch to RL when recombination-limited, default) or "never" (always EL)."""
+    policy = str(cfg.get("advanced", {}).get("rl_policy", "auto")).lower()
+    if policy not in ("auto", "never"):
+        raise ValueError(f'Unknown [advanced].rl_policy "{policy}". Valid: "auto", "never"')
+    return policy
+
+def _load_spectrum(cfg: Dict[str, Any]):
+    """XUVSpectrum from [xuv].spectrum_file, or None. A relative path is taken from the config file's folder."""
+    xuv = cfg.get("xuv", {})
+    path = xuv.get("spectrum_file")
+    if not path:
+        return None
+    path = Path(path).expanduser()
+    if not path.is_absolute() and "_config_dir" in cfg:
+        path = Path(cfg["_config_dir"]) / path
+    return XUVSpectrum.from_file(
+        path,
+        x_unit=xuv.get("spectrum_x_unit", "angstrom"),
+        scale=float(xuv.get("spectrum_scale", 1.0)),
+        E_min_eV=float(xuv.get("spectrum_E_min_eV", E_H_EDGE_EV)),
+        E_max_eV=xuv.get("spectrum_E_max_eV"),
+    )
 
 # Utility: load a field from packaged planet data
 def _load_planet_field(name: str, field: str):

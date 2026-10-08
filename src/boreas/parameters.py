@@ -155,12 +155,7 @@ class ModelParams:
         self.mmw_S2     = 2.0*self.am_s                 # 64
         
         # --- opacities in the IR (cm2 g-1); coarse 1-30 um Planck-mean-ish defaults ---
-        # He has no IR bands of its own; its only IR opacity is collision-induced. In an
-        # H2-rich gas a gram of He adds ~0.2-0.4x the H2-H2 CIA per gram behind kappa['H2']:
-        # half as many He atoms per gram as H2 molecules, and an H2-He pair absorbs
-        # ~0.5-1x as much as an H2-H2 pair. He-He CIA is negligible, so a He-dominated
-        # gas is more transparent than this value says.
-        self.kappa = {'H2': 1e-2, 'He': 3e-3,
+        self.kappa = {'H2': 1e-2, 'He': 3e-3, # He has no IR bands of its own; its only IR opacity is collision-induced.
                       'H2O': 1.0, 'O2': 2e-2, 'CO2': 5e-1,
                       'CO': 1e-1, 'CH4': 5e-1, 'N2': 1e-2, 'NH3': 5e-1,
                       'H2S': 8e-1, 'SO2': 1.0, 'S2': 2e-1}
@@ -168,7 +163,6 @@ class ModelParams:
         # ------------------------------
         # Region B: outflow (fully dissociated) mean molecular weights
         # ------------------------------
-        # “Outflow” (fully dissociated) per-atom μ for reservoir bookkeeping
         # (mean mass per atom from each molecular reservoir; m_H units)
         self.mmw_H2_outflow  = (2.0*self.am_h)/2.0             # 1
         self.mmw_He_outflow  = (self.am_he)/1.0                # 4
@@ -275,7 +269,14 @@ class ModelParams:
         self.D_molecular_fit = (2.2965e17, 0.765) # for CH4 in H2, cm^-1 s^-1
         
         self.atomic_y_xuv = None # optional dict of atomic number fractions at RXUV
-                
+
+        # optional stellar XUV spectrum (boreas.spectrum.XUVSpectrum), see set_xuv_spectrum().
+        # None -> the scalar picture: FXUV, E_photon and sigma_XUV.
+        self.xuv_spectrum = None
+        # with a spectrum: False -> chi from sigma_XUV (fixed ~20 eV values, default);
+        # True -> chi from the Verner+1996 sigma_s(E) weighted over the spectrum (XUVSpectrum.mass_absorption)
+        self.chi_from_spectrum = False
+
     # =================================================
     # Basic helpers
     # =================================================
@@ -296,6 +297,9 @@ class ModelParams:
             raise ValueError(f"X fractions must sum to 1 (got {s:.5f}).")
 
     def update_param(self, key, value):
+        if key == 'FXUV' and self.xuv_spectrum is not None:
+            raise ValueError("FXUV is set by the XUV spectrum. Use set_xuv_spectrum(spectrum, normalize_to=FXUV) "
+                             "to rescale it, or set_xuv_spectrum(None) to go back to a scalar FXUV.")
         setattr(self, key, value)
         if key.startswith('X_') or key in ('FXUV',):
             self._recompute_composites()
@@ -305,8 +309,35 @@ class ModelParams:
     def get_param(self, key, default=None):
         return getattr(self, key, default)
 
+    def set_xuv_spectrum(self, spectrum, normalize_to=None):
+        """
+        Use a stellar XUV spectrum (boreas.spectrum.XUVSpectrum) instead of the scalar FXUV
+        and E_photon (and, with chi_from_spectrum = True, instead of sigma_XUV).
+        normalize_to [erg cm^-2 s^-1] rescales it to that integrated flux, keeping its shape.
+        FXUV is set to the integrated flux, so it is still what the results report.
+        spectrum=None goes back to the scalar picture, keeping FXUV at its current value.
+        """
+        if spectrum is not None and normalize_to is not None:
+            spectrum = spectrum.scaled(float(normalize_to) / spectrum.energy_flux())
+        self.xuv_spectrum = spectrum
+        if spectrum is not None:
+            self.FXUV = spectrum.energy_flux()
+        self._recompute_composites()
+        self._init_opacities()
+        self.mmw_outflow_eff = None
+
+    def _spectrum_checked(self):
+        """The XUV spectrum, after checking FXUV was not changed behind its back."""
+        spec = self.xuv_spectrum
+        if float(self.FXUV) != spec.energy_flux():
+            raise ValueError(f"FXUV = {self.FXUV} no longer matches the XUV spectrum ({spec.energy_flux()}). "
+                             f"Use set_xuv_spectrum(spectrum, normalize_to=FXUV) to rescale it.")
+        return spec
+
     def fxuv_incident(self):
         """User/input XUV energy flux at the planet's orbit [erg cm^-2 s^-1]."""
+        if self.xuv_spectrum is not None:
+            return self._spectrum_checked().energy_flux()
         return float(self.FXUV)
 
     def fxuv_global_mean(self):
@@ -315,6 +346,8 @@ class ModelParams:
 
     def fxuv_photon_incident(self):
         """Incident stellar XUV photon flux at the planet's orbit [photons cm^-2 s^-1]."""
+        if self.xuv_spectrum is not None:
+            return self._spectrum_checked().photon_flux()
         return self.fxuv_incident() / self.E_photon
     
     # --- cross-section and opacity setters ---
@@ -331,10 +364,14 @@ class ModelParams:
         OR     χ_XUV =  Σ (sigma_atom * atoms per gram); units: cm^2 g^-1.
         Uses reservoirs and their outflow mu to count atoms per gram.
         
-        IMPORTANT: This function implicitly assumes all absorbers are neutral. 
+        IMPORTANT: This function implicitly assumes all absorbers are neutral.
         Near the base, hydrogen may be partly ionized in RL conditions. We ignore these cases.
+
+        With an XUV spectrum set and chi_from_spectrum = True, the same atoms per gram go to
+        xuv_spectrum.mass_absorption() instead, which weights sigma_s(E) over the spectrum.
         """
-        
+        spec = self.xuv_spectrum if self.chi_from_spectrum else None
+
         # -----------------------
         # 1) Atomic override path
         # -----------------------
@@ -349,6 +386,9 @@ class ModelParams:
                 raise ValueError("atomic_y_xuv provided but sums to 0.")
             yN = {k: max(v, 0.0)/s for k, v in y.items()}
 
+            if spec is not None:
+                return spec.mass_absorption({sp: yN.get(sp, 0.0) / (mu_eff * self.m_H) for sp in ATOMS})
+
             # chi = Σ sigma_i * y_i / (mu m_H)
             chi = 0.0
             for sp in ATOMS:
@@ -362,6 +402,8 @@ class ModelParams:
         # ------------------------------------
         # chi = Σ sigma_atom * (atoms per gram), with the atoms counted from each reservoir
         N = self.atomic_counts()
+        if spec is not None:
+            return spec.mass_absorption({sp: N[sp] / self.m_H for sp in ATOMS})
         chi = sum(self.sigma_XUV[sp] * N[sp] for sp in ATOMS) / self.m_H
 
         return chi # cm^2 g^-1

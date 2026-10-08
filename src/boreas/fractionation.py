@@ -245,7 +245,13 @@ class Fractionation:
         self.phys    = FractionationPhysics(params)
         self.general = GeneralizedFractionation(params)
 
-    def execute(self, mass_loss_results, mass_loss, tol=1e-5, max_iter=100, allow_dynamic_light_major=True, forced_light_major='H', debug=False):
+    def execute(self, mass_loss_results, mass_loss, tol=1e-5, max_iter=100, allow_dynamic_light_major=True, forced_light_major='H', debug=False, rl_policy='auto'):
+        """
+        rl_policy: 'auto'  -> switch to RL when H is the light major and the EL solution says the flow is recombination-limited (default)
+                   'never' -> always keep the EL solution
+        """
+        if rl_policy not in ('auto', 'never'):
+            raise ValueError(f"Unknown rl_policy '{rl_policy}' for fractionation. Valid: 'auto', 'never'")
         out = []
         for sol in mass_loss_results:
             if sol.get("regime") in ("SKIPPED", "CPML"):
@@ -281,7 +287,7 @@ class Fractionation:
                     i_guess, j_guess, _ = FractionationPhysics.choose_light_and_heavy_major(self.params, RXUV_EL, T_out_EL, Mp)
 
                     # 3) if i==H and EL says RL regime, recompute hydro once in RL. else keep EL.
-                    if (i_guess == 'H') and (t_ratio_EL < 1.0):
+                    if rl_policy == 'auto' and (i_guess == 'H') and (t_ratio_EL < 1.0):
                         hydro = mass_loss.compute_mass_loss_parameters(np.array([Mp]), np.array([Rp]), np.array([Teq]), rl_policy='if_H', light_major='H')[0]
                     else:
                         hydro = probe

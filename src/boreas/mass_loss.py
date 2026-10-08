@@ -438,7 +438,14 @@ class MassLoss:
         light_major: pass the chosen light major species symbol, e.g., 'H'
 
         Solve for RXUV, c_s, and Mdot in EL or RL, using mode flag for base molecular weight.
+
+        Besides the reported Mdot, every solution carries Mdot_EL_target: the analytic
+        energy-limited rate, eta * (FXUV/4) * pi * RXUV^3 / (G M), evaluated at the EL
+        RXUV solution. It is what calibrates c_s, not what is reported; the two differ
+        whenever c_s hits the 1.2e6 cm/s (~1e4 K) cap.
         """
+        if rl_policy not in ('auto', 'never', 'if_H'):
+            raise ValueError(f"Unknown rl_policy '{rl_policy}'. Valid: 'auto', 'never', 'if_H'")
 
         results = []
         for m_p, r_p, T_eq in zip(m_planet, r_planet, teq):
@@ -470,7 +477,8 @@ class MassLoss:
                 sol = {'m_planet':m_p,'r_planet':r_p,'Teq':T_eq,
                     'RXUV':RXUV_solution_EL,'cs':cs_outflow,'Mdot':Mdot_EL,
                     'RS_flow':RS_flow,'rho_eq':rho_eq_EL,'rho_pe':rho_pe_EL,
-                    'time_scale_ratio':time_scale_ratio,'regime':'EL'}
+                    'time_scale_ratio':time_scale_ratio,'regime':'EL',
+                    'Mdot_EL_target':self.compute_mdot_el_target(RXUV_solution_EL, m_p)}
 
                 # Recombination-limited (RL) regime check
                 allow_RL = False

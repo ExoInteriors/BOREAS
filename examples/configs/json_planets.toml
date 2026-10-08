@@ -1,6 +1,8 @@
 [planet]
-name           = "TRAPPIST-1 b"       # look up mass(grams)/radius(cm)/Teq(K) in packaged data (planet_params.json)
-FXUV_erg_cm2_s = "from_data"     # "from_data" to read .json value, or input value. Incident XUV (energy flux), or stellar irradiance at the planet’s orbit, ergs cm-2 s-1
+name           = "TRAPPIST-1 b"      # look up mass(grams)/radius(cm)/Teq(K) in packaged data (planet_params.json)
+FXUV_erg_cm2_s = "from_data"     # incident XUV energy flux at the planet's orbit, erg cm-2 s-1. Four options:
+                                 #   no [xuv].spectrum_file below: "from_data" -> look up the .json value | a number -> use it directly
+                                 #   with [xuv].spectrum_file set: "from_spectrum" -> integrate the spectrum as given | a number -> rescale the spectrum (same shape) to that total flux
 
 [composition]                    # atmospheric mass fractions (sum≈1); auto-normalized if enabled below
 H2  = 0
@@ -23,6 +25,12 @@ beta       = 0.75                 # dayside redistribution factor, 0.5<b<1
 emissivity = 1.0
 use_homopause = true              # diagnostic flag only: report the homopause, change nothing
 Kzz_cm2_s     = 1e8               # eddy diffusion coefficient, sets the homopause (Kzz = Dzz)
+
+[xuv]                             # optional stellar XUV spectrum. TO USE IT: uncomment, and set [planet].FXUV_erg_cm2_s = "from_spectrum"
+# spectrum_file     = "../spectra/trappist-1_xuv_1au.txt"  # Mega-MUSCLES (Wilson et al. 2021), flux at 1 au; relative to this file
+# spectrum_x_unit   = "angstrom"    # angstrom | nm | eV | keV; flux is erg cm^-2 s^-1 per this unit
+# spectrum_scale    = 7509.2        # (d_ref / a)^2 = (1 au / 0.01154 au)^2 for TRAPPIST-1 b (Agol et al. 2021)
+# chi_from_spectrum = false         # true: XUV absorption from the spectrum instead of the sigmas below
 
 [xuv.sigma_cm2]                   # atomic cross-sections sigma (σ) (cm^2) for the dissociated outflow at ~20 eV assuming neutral atoms (Verner+1996)
 H = 1.89e-18
@@ -69,3 +77,4 @@ max_iter                  = 100
 
 [advanced]                        # optional overrides
 auto_normalize_X = true           # normalize composition if sum!=1
+rl_policy        = "auto"         # "auto": switch to RL when recombination-limited; "never": always EL
